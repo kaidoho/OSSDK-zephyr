@@ -1,35 +1,37 @@
-From edc7c1d02e87a0e53686010ab5559c50091f410c Mon Sep 17 00:00:00 2001
+From 04660afddf9db896b8677aba0d23d65a6346c3a4 Mon Sep 17 00:00:00 2001
 From: kaidoho <kho237115@gmail.com>
-Date: Thu, 20 Feb 2020 20:33:23 +0100
-Subject: [PATCH] Add RTEMS target
+Date: Wed, 26 Feb 2020 20:32:54 +0100
+Subject: [PATCH] Add Zephyr OS
 
 ---
- config/arch/powerpc.in        |  2 +-
- config/binutils.in            |  2 +-
- config/binutils/binutils.in   |  1 +
- config/cc.in                  |  5 +--
- config/cc/gcc.in              |  3 +-
- config/debug/duma.in          |  1 +
- config/debug/gdb.in.native    |  8 +++--
- config/kernel.in              |  5 +++
- config/kernel/rtems.in        |  6 ++++
- config/libc.in                |  1 +
- config/libc/bionic.in         |  3 +-
- config/libc/glibc.in          |  2 +-
- config/libc/moxiebox.in       |  2 +-
- config/libc/musl.in           |  2 +-
- config/libc/newlib.in         | 16 +---------
- config/libc/uClibc.in         |  2 +-
- config/toolchain.in           |  4 ++-
- scripts/build/cc/gcc.sh       | 60 ++++++++++++++++++++++++++++++-----
- scripts/build/internals.sh    |  2 +-
- scripts/build/kernel/rtems.sh | 24 ++++++++++++++
- 20 files changed, 113 insertions(+), 38 deletions(-)
- create mode 100644 config/kernel/rtems.in
- create mode 100644 scripts/build/kernel/rtems.sh
+ config/arch/powerpc.in         |  2 +-
+ config/binutils.in             |  2 +-
+ config/binutils/binutils.in    |  1 +
+ config/cc.in                   |  5 +--
+ config/cc/gcc.in               | 16 +++++++++-
+ config/debug/duma.in           |  1 +
+ config/debug/gdb.in.native     |  8 +++--
+ config/kernel.in               |  9 ++++++
+ config/kernel/zephyr.in        |  6 ++++
+ config/libc.in                 |  1 +
+ config/libc/bionic.in          |  3 +-
+ config/libc/glibc.in           |  2 +-
+ config/libc/moxiebox.in        |  2 +-
+ config/libc/musl.in            |  2 +-
+ config/libc/newlib.in          | 21 ++++---------
+ config/libc/uClibc.in          |  2 +-
+ config/toolchain.in            |  4 ++-
+ scripts/build/arch/arm.sh      | 10 +++++-
+ scripts/build/cc/gcc.sh        | 56 ++++++++++++++++++++++++++++------
+ scripts/build/internals.sh     |  2 +-
+ scripts/build/kernel/zephyr.sh | 24 +++++++++++++++
+ scripts/config.sub             |  2 +-
+ 22 files changed, 139 insertions(+), 42 deletions(-)
+ create mode 100644 config/kernel/zephyr.in
+ create mode 100644 scripts/build/kernel/zephyr.sh
 
 diff --git a/config/arch/powerpc.in b/config/arch/powerpc.in
-index 40d88b91..d8a47305 100644
+index 40d88b91..73512ccb 100644
 --- a/config/arch/powerpc.in
 +++ b/config/arch/powerpc.in
 @@ -35,7 +35,7 @@ config ARCH_powerpc_ABI_DEFAULT
@@ -37,12 +39,12 @@ index 40d88b91..d8a47305 100644
      bool
      prompt "EABI"
 -    depends on BARE_METAL
-+    depends on BARE_METAL || RTEMS
++    depends on BARE_METAL || KERNEL_RTOS
      help
        The Embedded ABI (stack alignment of 8 bytes, etc).
  
 diff --git a/config/binutils.in b/config/binutils.in
-index c4762aa7..5343b9a1 100644
+index c4762aa7..fc444db3 100644
 --- a/config/binutils.in
 +++ b/config/binutils.in
 @@ -9,7 +9,7 @@ choice
@@ -50,24 +52,24 @@ index c4762aa7..5343b9a1 100644
      bool
      prompt "ELF"
 -    depends on ARCH_USE_MMU || BARE_METAL
-+    depends on ARCH_USE_MMU || BARE_METAL || RTEMS
++    depends on ARCH_USE_MMU || BARE_METAL || KERNEL_RTOS
      help
        This will make your system build ELF executables,
        suitable for architectures with an MMU.
 diff --git a/config/binutils/binutils.in b/config/binutils/binutils.in
-index 928659af..e871604d 100644
+index 928659af..1e0db02b 100644
 --- a/config/binutils/binutils.in
 +++ b/config/binutils/binutils.in
 @@ -171,6 +171,7 @@ config BINUTILS_FOR_TARGET
      bool
      prompt "binutils libraries for the target"
      depends on ! BARE_METAL
-+    depends on ! RTEMS
++    depends on ! KERNEL_RTOS
      help
        Some utilities may need binutils libraries to be available on
        the target, eg. oprofile.
 diff --git a/config/cc.in b/config/cc.in
-index 187a48d5..8317ba9f 100644
+index 187a48d5..8afe51f0 100644
 --- a/config/cc.in
 +++ b/config/cc.in
 @@ -58,7 +58,7 @@ config CC_LANG_FORTRAN
@@ -75,7 +77,7 @@ index 187a48d5..8317ba9f 100644
        compiler supports this language.
  
 -if ! BARE_METAL
-+if ! BARE_METAL && ! RTEMS
++if ! BARE_METAL && ! KERNEL_RTOS
  
  config CC_LANG_JAVA
      bool
@@ -84,7 +86,7 @@ index 187a48d5..8317ba9f 100644
        compiler supports this language.
  
 -endif # ! BARE_METAL
-+endif # ! BARE_METAL && ! RTEMS
++endif # ! BARE_METAL && ! KERNEL_RTOS
  
  config CC_LANG_OTHERS
      string
@@ -94,47 +96,67 @@ index 187a48d5..8317ba9f 100644
  endmenu
 +
 diff --git a/config/cc/gcc.in b/config/cc/gcc.in
-index be7d0552..e49039b0 100644
+index be7d0552..3497d500 100644
 --- a/config/cc/gcc.in
 +++ b/config/cc/gcc.in
-@@ -277,7 +277,7 @@ config CC_CXA_ATEXIT
+@@ -213,6 +213,19 @@ config CC_GCC_LIBMUDFLAP
+       alternatives (eg. DUMA, dmalloc...) that need neither re-
+       compilation nor re-link.
+ 
++config CC_GCC_LIBATMOMIC
++    bool
++    prompt "Compile libatomic"
++    depends on !THREADS_NONE
++    help
++      libatomic provides "Full support for C/C++ atomic operations as specified in draft 
++      ISO C and C++ documents". See:
++        https://gcc.gnu.org/wiki/Atomic
++
++      libatomic support requires threading.
++
++      The default is 'N'. Say 'Y' if you need it, and report success/failure.
++
+ config CC_GCC_LIBGOMP
+     bool
+     prompt "Compile libgomp"
+@@ -277,7 +290,7 @@ config CC_CXA_ATEXIT
      bool
      prompt "Use __cxa_atexit"
      default y
 -    depends on ! BARE_METAL || LIBC_PROVIDES_CXA_ATEXIT
-+    depends on (! BARE_METAL && ! RTEMS ) || LIBC_PROVIDES_CXA_ATEXIT
++    depends on (! BARE_METAL && ! KERNEL_RTOS ) || LIBC_PROVIDES_CXA_ATEXIT
      help
        If you get the missing symbol "__cxa_atexit" when building C++ programs,
        you might want to try disabling this option.
-@@ -297,6 +297,7 @@ config CC_GCC_SJLJ_EXCEPTIONS
+@@ -297,6 +310,7 @@ config CC_GCC_SJLJ_EXCEPTIONS
      tristate
      prompt "Use sjlj for exceptions"
      depends on ! BARE_METAL
-+    depends on ! RTEMS
++    depends on ! KERNEL_RTOS
      default m
      help
        'sjlj' is short for setjmp/longjmp.
 diff --git a/config/debug/duma.in b/config/debug/duma.in
-index bc69e17f..fb987ed3 100644
+index bc69e17f..c80fd181 100644
 --- a/config/debug/duma.in
 +++ b/config/debug/duma.in
 @@ -1,6 +1,7 @@
  # D.U.M.A. - Detect Unintended Memory Access - Memory checker
  
  ## depends on ! BARE_METAL
-+## depends on ! RTEMS
++## depends on ! KERNEL_RTOS
  ## depends on ! LIBC_BIONIC
  
  ## help D.U.M.A. - Detect Unintended Memory Access
 diff --git a/config/debug/gdb.in.native b/config/debug/gdb.in.native
-index 917a770b..3134495f 100644
+index 917a770b..543146ef 100644
 --- a/config/debug/gdb.in.native
 +++ b/config/debug/gdb.in.native
 @@ -4,6 +4,7 @@ config GDB_NATIVE
      bool
      prompt "Native gdb"
      depends on ! BARE_METAL
-+    depends on ! RTEMS
++    depends on ! KERNEL_RTOS
      depends on ! LIBC_BIONIC
      depends on CC_LANG_CXX || !GDB_8_0_or_later
      select LIBC_UCLIBC_WCHAR if LIBC_UCLIBC && GDB_8_0_or_later
@@ -142,7 +164,7 @@ index 917a770b..3134495f 100644
      prompt "gdbserver"
      default y
      depends on ! BARE_METAL
-+    depends on ! RTEMS
++    depends on ! KERNEL_RTOS
      select LIBC_UCLIBC_WCHAR if LIBC_UCLIBC && GDB_8_0_or_later
      select LIBC_UCLIBC_IPV6 if LIBC_UCLIBC && GDB_8_3_or_later
      help
@@ -152,58 +174,62 @@ index 917a770b..3134495f 100644
  
 -if BARE_METAL
 -comment "In bare-metal, you'll need to   "
-+if BARE_METAL || RTEMS
-+comment "In bare-metal or RTEMS, you'll need to   "
++if BARE_METAL || KERNEL_RTOS
++comment "For bare-metal or RTOS, you'll need to   "
  comment "provide your own gdbserver stub."
 -endif # BARE_METAL
-+endif # BARE_METAL || RTEMS
++endif # BARE_METAL || KERNEL_RTOS
 diff --git a/config/kernel.in b/config/kernel.in
-index 5c8a519e..892947ba 100644
+index 5c8a519e..495b8f67 100644
 --- a/config/kernel.in
 +++ b/config/kernel.in
-@@ -12,6 +12,10 @@ config BARE_METAL
+@@ -12,6 +12,14 @@ config BARE_METAL
  config WINDOWS
      bool
  
-+# FIXME use CT_KERNEL_rtems instead
-+config RTEMS
++config KERNEL_RTOS
 +    bool
++
++# FIXME use CT_KERNEL_zephyr instead
++config ZEPHYR
++    bool
++    select KERNEL_RTOS
 +
  # Each target OS (aka kernel) that support shared libraries can select
  # this, so the user can decide whether or not to build a shared library
  # enabled toolchain
-@@ -36,3 +40,4 @@ config SHARED_LIBS
+@@ -36,3 +44,4 @@ config SHARED_LIBS
        don't support it (maybe some nommu targets, for example, or bare metal).
  
  endmenu
 +
-diff --git a/config/kernel/rtems.in b/config/kernel/rtems.in
+diff --git a/config/kernel/zephyr.in b/config/kernel/zephyr.in
 new file mode 100644
-index 00000000..c0aa9a6c
+index 00000000..e3b4c4be
 --- /dev/null
-+++ b/config/kernel/rtems.in
++++ b/config/kernel/zephyr.in
 @@ -0,0 +1,6 @@
-+# RTEMS config options
++# Zephyr OS config options
 +
 +## no-package
-+## select RTEMS
++## select ZEPHYR
 +##
-+## help Build a toolchain targeting systems running RTEMS as host
++## help Build a toolchain targeting systems running Zephyr OS as host
 \ No newline at end of file
 diff --git a/config/libc.in b/config/libc.in
-index c132fc69..67e7e678 100644
+index c132fc69..d7b6633f 100644
 --- a/config/libc.in
 +++ b/config/libc.in
 @@ -95,6 +95,7 @@ config LIBC_XLDD
      prompt "Install a cross ldd-like helper"
      depends on SHARED_LIBS
      depends on ! BARE_METAL
-+    depends on ! RTEMS
++    depends on ! KERNEL_RTOS
      default y
      help
        Say 'Y' here if you want to have a ldd-like helper that
 diff --git a/config/libc/bionic.in b/config/libc/bionic.in
-index 558c2b47..69e98c1c 100644
+index 558c2b47..383b4c06 100644
 --- a/config/libc/bionic.in
 +++ b/config/libc/bionic.in
 @@ -1,7 +1,7 @@
@@ -211,7 +237,7 @@ index 558c2b47..69e98c1c 100644
  
  ## package android-ndk
 -## depends on ! WINDOWS && ! BARE_METAL
-+## depends on ! WINDOWS && ! BARE_METAL && ! RTEMS
++## depends on ! WINDOWS && ! BARE_METAL && ! KERNEL_RTOS
  ## depends on ARCH_ARM || ARCH_MIPS || ARCH_X86
  ## depends on EXPERIMENTAL
  ## select GCC_REQUIRE_6_or_later
@@ -221,7 +247,7 @@ index 558c2b47..69e98c1c 100644
      default "9" if ANDROID_API_9
 +
 diff --git a/config/libc/glibc.in b/config/libc/glibc.in
-index c7533593..4587359d 100644
+index c7533593..1d9c508c 100644
 --- a/config/libc/glibc.in
 +++ b/config/libc/glibc.in
 @@ -1,7 +1,7 @@
@@ -229,12 +255,12 @@ index c7533593..4587359d 100644
  # that apply to both glibc.
  
 -## depends on ! WINDOWS && ! BARE_METAL && ARCH_USE_MMU
-+## depends on ! WINDOWS && ! BARE_METAL && ARCH_USE_MMU && ! RTEMS
++## depends on ! WINDOWS && ! BARE_METAL && ARCH_USE_MMU && ! KERNEL_RTOS
  ## select LIBC_SUPPORT_THREADS_NATIVE
  ## select CC_CORE_PASSES_NEEDED
  # TBD: select GETTEXT for build only, not for host
 diff --git a/config/libc/moxiebox.in b/config/libc/moxiebox.in
-index e0366411..d5ecc8ec 100644
+index e0366411..195681aa 100644
 --- a/config/libc/moxiebox.in
 +++ b/config/libc/moxiebox.in
 @@ -5,7 +5,7 @@
@@ -242,35 +268,48 @@ index e0366411..d5ecc8ec 100644
  ## depends on ARCH_MOXIE
  ## depends on ARCH_LE
 -## depends on BARE_METAL
-+## depends on BARE_METAL || RTEMS
++## depends on BARE_METAL || KERNEL_RTOS
  ## select LIBC_NEWLIB_SHOW
  ## select LIBC_SUPPORT_THREADS_NONE
  ## select COMP_TOOLS_AUTOCONF if !CONFIGURE_has_autoconf_2_65_or_newer || !CONFIGURE_has_autoreconf_2_64_or_newer
 diff --git a/config/libc/musl.in b/config/libc/musl.in
-index b2ed8bf9..32432d2c 100644
+index b2ed8bf9..2a59fa34 100644
 --- a/config/libc/musl.in
 +++ b/config/libc/musl.in
 @@ -1,6 +1,6 @@
  # musl second-part option
  
 -## depends on ! WINDOWS && ! BARE_METAL
-+## depends on ! WINDOWS && ! BARE_METAL && ! RTEMS
++## depends on ! WINDOWS && ! BARE_METAL && ! KERNEL_RTOS
  ## depends on EXPERIMENTAL
  ## select LIBC_SUPPORT_THREADS_NATIVE
  ## select CC_CORE_PASSES_NEEDED
 diff --git a/config/libc/newlib.in b/config/libc/newlib.in
-index d84db70b..193031ad 100644
+index d84db70b..64b77b63 100644
 --- a/config/libc/newlib.in
 +++ b/config/libc/newlib.in
-@@ -1,6 +1,6 @@
+@@ -1,7 +1,8 @@
  # newlib options
  
 -## depends on BARE_METAL
-+## depends on BARE_METAL || RTEMS
++## depends on BARE_METAL || KERNEL_RTOS
  ## select LIBC_SUPPORT_THREADS_NONE
++## select LIBC_SUPPORT_THREADS_NATIVE
  ## select CC_CORE_PASSES_NEEDED if CANADIAN
  ## select CC_CORE_PASS_2_NEEDED if ! CANADIAN
-@@ -152,13 +152,6 @@ config LIBC_NEWLIB_MULTITHREAD
+ 
+@@ -12,6 +13,10 @@
+ ## help array of processors, and will usually work on any architecture with
+ ## help the addition of a few low-level routines.
+ 
++config THREADS
++    default "zephyr"    if KERNEL_ZEPHYR
++    default "none"      if THREADS_NONE
++    
+ # maybe older versions of newlib will support it too, but this
+ # needs to be checked
+ config NEWLIB_CXA_ATEXIT
+@@ -152,13 +157,6 @@ config LIBC_NEWLIB_MULTITHREAD
      help
          Enable support for multiple threads.
  
@@ -284,7 +323,7 @@ index d84db70b..193031ad 100644
  config LIBC_NEWLIB_EXTRA_SECTIONS
      bool
      prompt "Place each function & data element in their own section"
-@@ -362,13 +355,6 @@ config LIBC_NANO_NEWLIB_MULTITHREAD
+@@ -362,13 +360,6 @@ config LIBC_NANO_NEWLIB_MULTITHREAD
      help
          Enable support for multiple threads.
  
@@ -299,19 +338,19 @@ index d84db70b..193031ad 100644
      bool
      prompt "Place each function & data element in their own section"
 diff --git a/config/libc/uClibc.in b/config/libc/uClibc.in
-index 21da64fe..d6801909 100644
+index 21da64fe..e75b4641 100644
 --- a/config/libc/uClibc.in
 +++ b/config/libc/uClibc.in
 @@ -1,6 +1,6 @@
  # uClibc options
  
 -## depends on ! WINDOWS && ! BARE_METAL
-+## depends on ! WINDOWS && ! BARE_METAL && ! RTEMS
++## depends on ! WINDOWS && ! BARE_METAL && ! KERNEL_RTOS
  ##
  ## select LIBC_SUPPORT_THREADS_LT
  ## select LIBC_SUPPORT_THREADS_NONE
 diff --git a/config/toolchain.in b/config/toolchain.in
-index 36a4782e..ae9312d0 100644
+index 36a4782e..dc36ac97 100644
 --- a/config/toolchain.in
 +++ b/config/toolchain.in
 @@ -4,13 +4,14 @@ comment "General toolchain options"
@@ -319,14 +358,14 @@ index 36a4782e..ae9312d0 100644
  config FORCE_SYSROOT
      bool
 -    default y if !OBSOLETE && !BARE_METAL
-+    default y if !OBSOLETE && (!BARE_METAL && !RTEMS)
++    default y if !OBSOLETE && (!BARE_METAL && !KERNEL_RTOS)
      select USE_SYSROOT
  
  config USE_SYSROOT
      bool
      prompt "Use sysroot'ed toolchain"
      depends on !BARE_METAL
-+    depends on !RTEMS
++    depends on !KERNEL_RTOS
      default y
      help
        Use the 'shiny new' sysroot feature of gcc: libraries split between
@@ -335,8 +374,29 @@ index 36a4782e..ae9312d0 100644
  
  endmenu
 +
+diff --git a/scripts/build/arch/arm.sh b/scripts/build/arch/arm.sh
+index 4873df1a..8e35d337 100644
+--- a/scripts/build/arch/arm.sh
++++ b/scripts/build/arch/arm.sh
+@@ -19,7 +19,15 @@ CT_DoArchTupleValues() {
+         uClibc,y)   CT_TARGET_SYS=uclibc${CT_LIBC_UCLIBC_USE_GNU_SUFFIX:+gnu}eabi;;
+         musl,y)     CT_TARGET_SYS=musleabi;;
+         bionic,y)   CT_TARGET_SYS=androideabi;;
+-        *,y)        CT_TARGET_SYS=eabi;;
++        *,y)        
++            case "${CT_KERNEL_RTOS}" in
++                y)
++                    CT_TARGET_SYS=
++                    ;;
++                *)
++                    CT_TARGET_SYS=eabi
++                    ;;
++        esac
+     esac
+ 
+     # Set the default instruction set mode
 diff --git a/scripts/build/cc/gcc.sh b/scripts/build/cc/gcc.sh
-index 642fada0..851c6003 100644
+index 642fada0..4a105f4f 100644
 --- a/scripts/build/cc/gcc.sh
 +++ b/scripts/build/cc/gcc.sh
 @@ -267,7 +267,8 @@ do_cc_core_pass_2() {
@@ -344,7 +404,7 @@ index 642fada0..851c6003 100644
  # Usage: do_gcc_core_backend param=value [...]
  #   Parameter           : Definition                                : Type      : Default
 -#   mode                : build a 'static', 'shared' or 'baremetal' : string    : (none)
-+#   mode                : build a 'static', 'shared', 'baremetal' or 'rtems' 
++#   mode                : build a 'static', 'shared', 'baremetal' or 'zephyr' 
 +#                                                                   : string    : (none)
  #   host                : the machine the core will run on          : tuple     : (none)
  #   prefix              : dir prefix to install into                : dir       : (none)
@@ -354,7 +414,7 @@ index 642fada0..851c6003 100644
  #   build_step          : build step 'core1', 'core2', 'gcc_build',
  #                         'libstdcxx_nano' or 'gcc_host'            : string    : (none)
 -# Usage: do_gcc_core_backend mode=[static|shared|baremetal] build_libgcc=[yes|no] build_staticlinked=[yes|no]
-+# Usage: do_gcc_core_backend mode=[static|shared|baremetal|rtems] build_libgcc=[yes|no] build_staticlinked=[yes|no]
++# Usage: do_gcc_core_backend mode=[static|shared|baremetal|zephyr] build_libgcc=[yes|no] build_staticlinked=[yes|no]
  do_gcc_core_backend() {
      local mode
      local build_libgcc=no
@@ -362,9 +422,9 @@ index 642fada0..851c6003 100644
      esac
  
      case "${mode}" in
-+        rtems)
++        zephyr)
 +            extra_config+=("--with-newlib")
-+            extra_config+=("--enable-threads=rtems")
++            extra_config+=("--enable-threads=zephyr")
 +            extra_config+=("--disable-shared")
 +            ;;
          static)
@@ -375,7 +435,7 @@ index 642fada0..851c6003 100644
      fi
  
 +    if [ -n "${CT_CC_GCC_ENABLE_CXX_FLAGS}" \
-+            -a "${mode}" = "rtems" ]; then
++            -a "${mode}" = "zephyr" ]; then
 +        extra_config+=("--enable-cxx-flags=${CT_CC_GCC_ENABLE_CXX_FLAGS}")
 +    fi
 +
@@ -386,64 +446,68 @@ index 642fada0..851c6003 100644
              repair_cc="CC_FOR_BUILD=${CT_BUILD}-gcc \
                         CXX_FOR_BUILD=${CT_BUILD}-g++ \
                         GCC_FOR_TARGET=${CT_TARGET}-${CT_CC}"
-+        elif [ "${CT_RTEMS},${CT_CANADIAN}" = "y,y" ]; then
++        elif [ "${CT_KERNEL_RTOS},${CT_CANADIAN}" = "y,y" ]; then
 +            repair_cc="CC_FOR_BUILD=${CT_BUILD}-gcc \
 +                       CXX_FOR_BUILD=${CT_BUILD}-g++ \
 +                       GCC_FOR_TARGET=${CT_TARGET}-${CT_CC}"
          else
              repair_cc=""
          fi
-@@ -772,6 +787,17 @@ do_cc_for_build() {
-             build_final_opts+=( "build_staticlinked=yes" )
-         fi
-         build_final_backend=do_gcc_core_backend
-+    elif [ "${CT_RTEMS}" = "y" ]; then
-+        # In the tests I've done, bare-metal was not impacted by the
-+        # lack of such a compiler, but better safe than sorry...
-+        build_final_opts+=( "mode=rtems" )
-+        build_final_opts+=( "build_libgcc=yes" )
-+        build_final_opts+=( "build_libstdcxx=yes" )
-+        build_final_opts+=( "build_libgfortran=yes" )
-+        if [ "${CT_STATIC_TOOLCHAIN}" = "y" ]; then
-+            build_final_opts+=( "build_staticlinked=yes" )
-+        fi
-+        build_final_backend=do_gcc_core_backend
-     else
-         build_final_backend=do_gcc_backend
+@@ -971,6 +986,7 @@ do_gcc_backend() {
+     local cflags
+     local cflags_for_build
+     local cflags_for_target
++    local ldflags_for_target
+     local ldflags
+     local build_manuals
+     local build_step
+@@ -1033,7 +1049,16 @@ do_gcc_backend() {
      fi
-@@ -861,6 +887,15 @@ do_cc_for_host() {
-             final_opts+=( "build_staticlinked=yes" )
-         fi
-         final_backend=do_gcc_core_backend
-+    elif [ "${CT_RTEMS}" = "y" ]; then
-+        final_opts+=( "mode=rtems" )
-+        final_opts+=( "build_libgcc=yes" )
-+        final_opts+=( "build_libstdcxx=yes" )
-+        final_opts+=( "build_libgfortran=yes" )
-+        if [ "${CT_STATIC_TOOLCHAIN}" = "y" ]; then
-+            final_opts+=( "build_staticlinked=yes" )
-+        fi
-+        final_backend=do_gcc_core_backend
-     else
-         final_backend=do_gcc_backend
+ 
+     if [ "${CT_THREADS}" = "none" ]; then
++        CT_DoLog EXTRA "Markus: CT_THREADS is none"
+         extra_config+=(--disable-libatomic)
++    else
++        CT_DoLog EXTRA "Markus: CT_THREADS is not none"
++       if [ "${CT_CC_GCC_LIBATMOMIC}" = "y" ]; then
++            CT_DoLog EXTRA "Markus: CT_CC_GCC_LIBATMOMIC is  y"
++            extra_config+=(--enable-libatomic)
++       else
++        CT_DoLog EXTRA "Markus: CT_CC_GCC_LIBATMOMIC is not y"
++       fi 
      fi
-@@ -908,6 +943,15 @@ do_cc_libstdcxx_nano()
-                 final_opts+=( "build_staticlinked=yes" )
-             fi
-             final_backend=do_gcc_core_backend
-+        elif [ "${CT_RTEMS}" = "y" ]; then
-+            final_opts+=( "mode=rtems" )
-+            final_opts+=( "build_libgcc=yes" )
-+            final_opts+=( "build_libstdcxx=yes" )
-+            final_opts+=( "build_libgfortran=yes" )
-+            if [ "${CT_STATIC_TOOLCHAIN}" = "y" ]; then
-+                final_opts+=( "build_staticlinked=yes" )
-+            fi
-+            final_backend=do_gcc_core_backend
+     if [ "${CT_CC_GCC_LIBMUDFLAP}" = "y" ]; then
+         extra_config+=(--enable-libmudflap)
+@@ -1041,8 +1066,10 @@ do_gcc_backend() {
+         extra_config+=(--disable-libmudflap)
+     fi
+     if [ "${CT_CC_GCC_LIBGOMP}" = "y" ]; then
++        CT_DoLog EXTRA "Markus: CT_CC_GCC_LIBGOMP is y"
+         extra_config+=(--enable-libgomp)
+     else
++        CT_DoLog EXTRA "Markus: CT_CC_GCC_LIBGOMP not y"
+         extra_config+=(--disable-libgomp)
+     fi
+     if [ "${CT_CC_GCC_LIBSSP}" = "y" ]; then
+@@ -1105,7 +1132,7 @@ do_gcc_backend() {
+         final_LDFLAGS+=("-lstdc++")
+         final_LDFLAGS+=("-lm")
+     fi
+-
++    
+     extra_config+=("--with-gmp=${complibs}")
+     extra_config+=("--with-mpfr=${complibs}")
+     extra_config+=("--with-mpc=${complibs}")
+@@ -1136,6 +1163,8 @@ do_gcc_backend() {
+         if [ "${CT_THREADS}" = "win32" ]; then
+             extra_config+=("--enable-threads=win32")
+             extra_config+=("--disable-win32-registry")
++        elif [ "${CT_THREADS}" = "zephyr" ]; then
++            extra_config+=("--enable-threads=zephyr")
          else
-             final_backend=do_gcc_backend
+             extra_config+=("--enable-threads=posix")
          fi
-@@ -1149,12 +1193,6 @@ do_gcc_backend() {
+@@ -1149,12 +1178,6 @@ do_gcc_backend() {
          extra_config+=("--disable-libstdcxx-pch")
      fi
  
@@ -456,7 +520,7 @@ index 642fada0..851c6003 100644
      case "${CT_CC_GCC_LDBL_128}" in
          y)  extra_config+=("--with-long-double-128");;
          m)  ;;
-@@ -1252,6 +1290,12 @@ do_gcc_backend() {
+@@ -1252,6 +1275,19 @@ do_gcc_backend() {
      # Assume '-O2' by default for building target libraries.
      cflags_for_target="-g -O2 ${cflags_for_target}"
  
@@ -465,12 +529,28 @@ index 642fada0..851c6003 100644
 +        cflags_for_target ="-fdata-sections ${cflags_for_target}"
 +        cflags_for_target ="-fno-exceptions ${cflags_for_target}"
 +    fi
++    
++    ldflags_for_target="${CT_TARGET_LDFLAGS}"
++
++    if [ "${CT_KERNEL_RTOS}" = "y" ]; then
++        ldflags_for_target+=("-B${CT_PREFIX_DIR}/${CT_TARGET}/lib/")
++    fi
++
 +
      # NB: not using CT_ALL_TARGET_CFLAGS/CT_ALL_TARGET_LDFLAGS here!
      # See do_gcc_core_backend for explanation.
      CT_DoExecLog CFG                                   \
+@@ -1263,7 +1299,7 @@ do_gcc_backend() {
+     LDFLAGS="${final_LDFLAGS[*]}"                      \
+     CFLAGS_FOR_TARGET="${cflags_for_target}"           \
+     CXXFLAGS_FOR_TARGET="${cflags_for_target}"         \
+-    LDFLAGS_FOR_TARGET="${CT_TARGET_LDFLAGS}"          \
++    LDFLAGS_FOR_TARGET="${ldflags_for_target[*]}"      \
+     ${CONFIG_SHELL}                                    \
+     "${CT_SRC_DIR}/gcc/configure"                      \
+         --build=${CT_BUILD}                            \
 diff --git a/scripts/build/internals.sh b/scripts/build/internals.sh
-index ed9e2b11..1d39b2a8 100644
+index ed9e2b11..319d1743 100644
 --- a/scripts/build/internals.sh
 +++ b/scripts/build/internals.sh
 @@ -105,7 +105,7 @@ do_finish() {
@@ -478,15 +558,15 @@ index ed9e2b11..1d39b2a8 100644
      fi
  
 -    if [ "${CT_BARE_METAL}" != "y" ]; then
-+    if [[ "${CT_BARE_METAL}" != "y" && "${CT_RTEMS}" != "y" ]]; then
++    if [[ "${CT_BARE_METAL}" != "y" && "${CT_KERNEL_RTOS}" != "y" ]]; then
          CT_DoLog EXTRA "Installing the populate helper"
          sed -r -e 's|@@CT_TARGET@@|'"${CT_TARGET}"'|g;' \
                 -e 's|@@CT_install@@|'"install"'|g;'     \
-diff --git a/scripts/build/kernel/rtems.sh b/scripts/build/kernel/rtems.sh
+diff --git a/scripts/build/kernel/zephyr.sh b/scripts/build/kernel/zephyr.sh
 new file mode 100644
-index 00000000..9ff803fb
+index 00000000..7302283d
 --- /dev/null
-+++ b/scripts/build/kernel/rtems.sh
++++ b/scripts/build/kernel/zephyr.sh
 @@ -0,0 +1,24 @@
 +# This file declares functions for Zephyr OS
 +# Copyright 2020 M.B. Moessner
@@ -494,24 +574,37 @@ index 00000000..9ff803fb
 +
 +CT_DoKernelTupleValues()
 +{
-+    CT_DoStep INFO "Get RTEMS tuple"
++    CT_DoStep INFO "Get Zephyr tuple"
 +    CT_TARGET_KERNEL=zephyr2
 +}
 +
 +do_kernel_get()
 +{
-+    CT_DoStep INFO "Fetch RTEMS source"
++    CT_DoStep INFO "Fetch Zephyr source"
 +}
 +
 +do_kernel_extract()
 +{
-+    CT_DoStep INFO "Extract RTEMS source"
++    CT_DoStep INFO "Extract Zephyr source"
 +}
 +
 +do_kernel_headers()
 +{
-+    CT_DoStep INFO "Install RTEMS headers"
++    CT_DoStep INFO "Install Zephyr headers"
 +}
+diff --git a/scripts/config.sub b/scripts/config.sub
+index 3b4c7624..e5573b1a 100755
+--- a/scripts/config.sub
++++ b/scripts/config.sub
+@@ -1365,7 +1365,7 @@ case $os in
+ 	     | powermax* | dnix* | nx6 | nx7 | sei* | dragonfly* \
+ 	     | skyos* | haiku* | rdos* | toppers* | drops* | es* \
+ 	     | onefs* | tirtos* | phoenix* | fuchsia* | redox* | bme* \
+-	     | midnightbsd* | amdhsa* | unleashed* | emscripten*)
++	     | midnightbsd* | amdhsa* | unleashed* | emscripten* | zephyr*)
+ 	# Remember, each alternative MUST END IN *, to match a version number.
+ 		;;
+ 	qnx*)
 -- 
 2.17.1
 
