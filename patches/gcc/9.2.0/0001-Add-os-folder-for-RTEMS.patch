@@ -1,0 +1,24 @@
+From 9614c0d884b9b31fbf4012ee985b0ef4a51f91fe Mon Sep 17 00:00:00 2001
+From: kaidoho <kho237115@gmail.com>
+Date: Sun, 23 Feb 2020 23:13:07 +0100
+Subject: [PATCH] fix
+
+---
+ libstdc++-v3/configure.host | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/libstdc++-v3/configure.host b/libstdc++-v3/configure.host
+index f2ff1295d..5871f34b1 100644
+--- a/libstdc++-v3/configure.host
++++ b/libstdc++-v3/configure.host
+@@ -300,6 +300,7 @@ case "${host_os}" in
+     c_model=c
+     ;;
+   rtems*)
++    os_include_dir="os/generic"
+     # Use libatomic if necessary and avoid libstdc++ specific atomicity support
+     atomicity_dir="cpu/generic/atomicity_builtins"
+     ;;
+-- 
+2.17.1
+

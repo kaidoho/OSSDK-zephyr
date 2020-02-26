@@ -1,0 +1,25 @@
+From 97b3c6362434f9203e2a578d919ea419777dd28f Mon Sep 17 00:00:00 2001
+From: Markus Moessner <Markus.Moessner@sick.de>
+Date: Tue, 25 Feb 2020 17:22:54 +0100
+Subject: [PATCH] fix
+
+---
+ scripts/build/cc/gcc.sh | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/scripts/build/cc/gcc.sh b/scripts/build/cc/gcc.sh
+index 80839a0..c39fe36 100644
+--- a/scripts/build/cc/gcc.sh
++++ b/scripts/build/cc/gcc.sh
+@@ -1015,7 +1015,7 @@ do_gcc_backend() {
+     local cflags
+     local cflags_for_build
+     local cflags_for_target
+-    local ldflags_for_taget
++    local ldflags_for_target
+     local ldflags
+     local build_manuals
+     local build_step
+-- 
+2.7.4
+

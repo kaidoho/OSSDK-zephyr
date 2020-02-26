@@ -1,0 +1,33 @@
+From 53900e32c046ef896c711634b27c4b584c175e0d Mon Sep 17 00:00:00 2001
+From: Markus Moessner <Markus.Moessner@sick.de>
+Date: Fri, 21 Feb 2020 09:34:41 +0100
+Subject: [PATCH] Remove sys from build
+
+---
+ scripts/build/arch/arm.sh | 10 +++++++++-
+ 1 file changed, 9 insertions(+), 1 deletion(-)
+
+diff --git a/scripts/build/arch/arm.sh b/scripts/build/arch/arm.sh
+index 4873df1..72c568b 100644
+--- a/scripts/build/arch/arm.sh
++++ b/scripts/build/arch/arm.sh
+@@ -19,7 +19,15 @@ CT_DoArchTupleValues() {
+         uClibc,y)   CT_TARGET_SYS=uclibc${CT_LIBC_UCLIBC_USE_GNU_SUFFIX:+gnu}eabi;;
+         musl,y)     CT_TARGET_SYS=musleabi;;
+         bionic,y)   CT_TARGET_SYS=androideabi;;
+-        *,y)        CT_TARGET_SYS=eabi;;
++        *,y)        
++            case "${CT_KERNEL_RTEMS}" in
++                y)
++                    CT_TARGET_SYS=
++                    ;;
++                *)
++                    CT_TARGET_SYS=eabi
++                    ;;
++        esac
+     esac
+ 
+     # Set the default instruction set mode
+-- 
+2.7.4
+

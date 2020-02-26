@@ -1,0 +1,32 @@
+From 4ee4f219a41ac645d980eaec520aa44db0f7b79a Mon Sep 17 00:00:00 2001
+From: kaidoho <kho237115@gmail.com>
+Date: Fri, 13 Dec 2019 13:16:35 +0100
+Subject: [PATCH] Fix compilation error when using MinGW
+
+---
+ gettext-tools/gnulib-tests/pthread_sigmask.c | 6 ++++++
+ 1 file changed, 6 insertions(+)
+
+diff --git a/gettext-tools/gnulib-tests/pthread_sigmask.c b/gettext-tools/gnulib-tests/pthread_sigmask.c
+index 3e40cfc..1594376 100644
+--- a/gettext-tools/gnulib-tests/pthread_sigmask.c
++++ b/gettext-tools/gnulib-tests/pthread_sigmask.c
+@@ -30,9 +30,15 @@
+ # include <unistd.h>
+ #endif
+ 
++#ifdef __MINGW32__
++#undef pthread_sigmask
++int
++pthread_sigmask (int how, const sigset_t *new_mask, sigset_t *old_mask)
++#else
+ int
+ pthread_sigmask (int how, const sigset_t *new_mask, sigset_t *old_mask)
+ #undef pthread_sigmask
++#endif
+ {
+ #if HAVE_PTHREAD_SIGMASK
+   int ret;
+-- 
+2.17.1
+

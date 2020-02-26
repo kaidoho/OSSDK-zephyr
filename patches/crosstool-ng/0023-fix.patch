@@ -1,0 +1,25 @@
+From 70becb37010e0bde9703a41343f1b11b7aa14511 Mon Sep 17 00:00:00 2001
+From: kaidoho <kho237115@gmail.com>
+Date: Tue, 25 Feb 2020 21:18:35 +0100
+Subject: [PATCH] fix
+
+---
+ scripts/build/cc/gcc.sh | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/scripts/build/cc/gcc.sh b/scripts/build/cc/gcc.sh
+index 17de2f55..e096dfe1 100644
+--- a/scripts/build/cc/gcc.sh
++++ b/scripts/build/cc/gcc.sh
+@@ -1313,7 +1313,7 @@ do_gcc_backend() {
+     ldflags_for_target="${CT_TARGET_LDFLAGS}"
+ 
+     if [ "${CT_RTEMS}" = "y" ]; then
+-        ldflags_for_target+=("-L${CT_PREFIX_DIR}/${CT_TARGET}/lib")
++        ldflags_for_target+=("-B${CT_PREFIX_DIR}/${CT_TARGET}/lib/")
+     fi
+ 
+ 
+-- 
+2.17.1
+

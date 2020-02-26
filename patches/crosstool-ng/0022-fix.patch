@@ -1,0 +1,26 @@
+From 551999de3c740d0cd0bf5f38164591b6b501779d Mon Sep 17 00:00:00 2001
+From: kaidoho <kho237115@gmail.com>
+Date: Tue, 25 Feb 2020 19:59:06 +0100
+Subject: [PATCH] fix
+
+---
+ scripts/build/cc/gcc.sh | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/scripts/build/cc/gcc.sh b/scripts/build/cc/gcc.sh
+index c39fe36f..17de2f55 100644
+--- a/scripts/build/cc/gcc.sh
++++ b/scripts/build/cc/gcc.sh
+@@ -1310,7 +1310,8 @@ do_gcc_backend() {
+         cflags_for_target ="-fno-exceptions ${cflags_for_target}"
+     fi
+     
+-    ldflags_for_target = "${CT_TARGET_LDFLAGS}"
++    ldflags_for_target="${CT_TARGET_LDFLAGS}"
++
+     if [ "${CT_RTEMS}" = "y" ]; then
+         ldflags_for_target+=("-L${CT_PREFIX_DIR}/${CT_TARGET}/lib")
+     fi
+-- 
+2.17.1
+

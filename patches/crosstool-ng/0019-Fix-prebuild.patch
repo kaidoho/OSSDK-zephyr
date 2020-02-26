@@ -1,0 +1,25 @@
+From a0954503816629c67983844bd64b515f00674a37 Mon Sep 17 00:00:00 2001
+From: Markus Moessner <Markus.Moessner@sick.de>
+Date: Tue, 25 Feb 2020 15:54:42 +0100
+Subject: [PATCH] fix
+
+---
+ scripts/build/cc/gcc.sh | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/scripts/build/cc/gcc.sh b/scripts/build/cc/gcc.sh
+index 506bf12..ff2ff64 100644
+--- a/scripts/build/cc/gcc.sh
++++ b/scripts/build/cc/gcc.sh
+@@ -1161,7 +1161,7 @@ do_gcc_backend() {
+         final_LDFLAGS+=("-lm")
+     fi
+ 
+-    if [ "${CT_RTEMS}" ="y" ]; then
++    if [ "${CT_RTEMS}" = "y" ]; then
+         final_LDFLAGS+=("-L${CT_PREFIX_DIR}/${CT_TARGET}/lib")
+     fi
+     
+-- 
+2.7.4
+

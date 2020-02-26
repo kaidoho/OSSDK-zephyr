@@ -1,0 +1,39 @@
+From 3a651417d05b747da478bfd954f6c457c349d488 Mon Sep 17 00:00:00 2001
+From: kaidoho <kho237115@gmail.com>
+Date: Sun, 23 Feb 2020 17:44:41 +0100
+Subject: [PATCH] fix
+
+---
+ scripts/build/cc/gcc.sh | 16 ++++++++--------
+ 1 file changed, 8 insertions(+), 8 deletions(-)
+
+diff --git a/scripts/build/cc/gcc.sh b/scripts/build/cc/gcc.sh
+index 94bc3898..6085289d 100644
+--- a/scripts/build/cc/gcc.sh
++++ b/scripts/build/cc/gcc.sh
+@@ -888,14 +888,14 @@ do_cc_for_host() {
+         fi
+         final_backend=do_gcc_core_backend
+     elif [ "${CT_RTEMS}" = "y" ]; then
+-        final_opts+=( "mode=rtems" )
+-        final_opts+=( "build_libgcc=yes" )
+-        final_opts+=( "build_libstdcxx=yes" )
+-        final_opts+=( "build_libgfortran=yes" )
+-        if [ "${CT_STATIC_TOOLCHAIN}" = "y" ]; then
+-            final_opts+=( "build_staticlinked=yes" )
+-        fi
+-        final_backend=do_gcc_core_backend
++       # final_opts+=( "mode=rtems" )
++       # final_opts+=( "build_libgcc=yes" )
++       # final_opts+=( "build_libstdcxx=yes" )
++       # final_opts+=( "build_libgfortran=yes" )
++       # if [ "${CT_STATIC_TOOLCHAIN}" = "y" ]; then
++       #     final_opts+=( "build_staticlinked=yes" )
++       # fi
++        final_backend=do_gcc_backend
+     else
+         final_backend=do_gcc_backend
+     fi
+-- 
+2.17.1
+

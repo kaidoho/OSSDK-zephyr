@@ -1,0 +1,25 @@
+From 91514e71102ceaf9feee65fd0c26f384de22375d Mon Sep 17 00:00:00 2001
+From: Markus Moessner <Markus.Moessner@sick.de>
+Date: Tue, 25 Feb 2020 11:38:43 +0100
+Subject: [PATCH] Fix final build compiler
+
+---
+ scripts/build/cc/gcc.sh | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/scripts/build/cc/gcc.sh b/scripts/build/cc/gcc.sh
+index ad4885d..b464e22 100644
+--- a/scripts/build/cc/gcc.sh
++++ b/scripts/build/cc/gcc.sh
+@@ -790,7 +790,7 @@ do_cc_for_build() {
+     elif [ "${CT_RTEMS}" = "y" ]; then
+         # In the tests I've done, bare-metal was not impacted by the
+         # lack of such a compiler, but better safe than sorry...
+-        build_final_opts+=( "mode=rtems" )
++        build_final_opts+=( "mode=static" )
+         build_final_opts+=( "build_libgcc=yes" )
+         build_final_opts+=( "build_libstdcxx=yes" )
+         build_final_opts+=( "build_libgfortran=yes" )
+-- 
+2.7.4
+

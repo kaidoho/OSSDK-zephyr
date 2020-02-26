@@ -1,0 +1,57 @@
+From 28ad291ed41a142bd341f53d07a44287d42580df Mon Sep 17 00:00:00 2001
+From: Markus Moessner <Markus.Moessner@sick.de>
+Date: Tue, 25 Feb 2020 16:54:30 +0100
+Subject: [PATCH] fix
+
+---
+ scripts/build/cc/gcc.sh | 13 ++++++++-----
+ 1 file changed, 8 insertions(+), 5 deletions(-)
+
+diff --git a/scripts/build/cc/gcc.sh b/scripts/build/cc/gcc.sh
+index ff2ff64..80839a0 100644
+--- a/scripts/build/cc/gcc.sh
++++ b/scripts/build/cc/gcc.sh
+@@ -1015,6 +1015,7 @@ do_gcc_backend() {
+     local cflags
+     local cflags_for_build
+     local cflags_for_target
++    local ldflags_for_taget
+     local ldflags
+     local build_manuals
+     local build_step
+@@ -1160,10 +1161,6 @@ do_gcc_backend() {
+         final_LDFLAGS+=("-lstdc++")
+         final_LDFLAGS+=("-lm")
+     fi
+-
+-    if [ "${CT_RTEMS}" = "y" ]; then
+-        final_LDFLAGS+=("-L${CT_PREFIX_DIR}/${CT_TARGET}/lib")
+-    fi
+     
+     extra_config+=("--with-gmp=${complibs}")
+     extra_config+=("--with-mpfr=${complibs}")
+@@ -1312,6 +1309,12 @@ do_gcc_backend() {
+         cflags_for_target ="-fdata-sections ${cflags_for_target}"
+         cflags_for_target ="-fno-exceptions ${cflags_for_target}"
+     fi
++    
++    ldflags_for_target = "${CT_TARGET_LDFLAGS}"
++    if [ "${CT_RTEMS}" = "y" ]; then
++        ldflags_for_target+=("-L${CT_PREFIX_DIR}/${CT_TARGET}/lib")
++    fi
++
+ 
+     # NB: not using CT_ALL_TARGET_CFLAGS/CT_ALL_TARGET_LDFLAGS here!
+     # See do_gcc_core_backend for explanation.
+@@ -1324,7 +1327,7 @@ do_gcc_backend() {
+     LDFLAGS="${final_LDFLAGS[*]}"                      \
+     CFLAGS_FOR_TARGET="${cflags_for_target}"           \
+     CXXFLAGS_FOR_TARGET="${cflags_for_target}"         \
+-    LDFLAGS_FOR_TARGET="${CT_TARGET_LDFLAGS}"          \
++    LDFLAGS_FOR_TARGET="${ldflags_for_target[*]}"      \
+     ${CONFIG_SHELL}                                    \
+     "${CT_SRC_DIR}/gcc/configure"                      \
+         --build=${CT_BUILD}                            \
+-- 
+2.7.4
+

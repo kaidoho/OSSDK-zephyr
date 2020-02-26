@@ -1,0 +1,69 @@
+From 75c23b85a357f1943e136ad8ebf360d3cd6c3910 Mon Sep 17 00:00:00 2001
+From: kaidoho <kho237115@gmail.com>
+Date: Sun, 23 Feb 2020 12:29:46 +0100
+Subject: [PATCH] Add switch to force build of libatomic
+
+---
+ config/cc/gcc.in        | 13 +++++++++++++
+ scripts/build/cc/gcc.sh | 11 +++++++++++
+ 2 files changed, 24 insertions(+)
+
+diff --git a/config/cc/gcc.in b/config/cc/gcc.in
+index e49039b0..0a68c4ca 100644
+--- a/config/cc/gcc.in
++++ b/config/cc/gcc.in
+@@ -213,6 +213,19 @@ config CC_GCC_LIBMUDFLAP
+       alternatives (eg. DUMA, dmalloc...) that need neither re-
+       compilation nor re-link.
+ 
++config CC_GCC_LIBATMOMIC
++    bool
++    prompt "Compile libatomic"
++    depends on !THREADS_NONE
++    help
++      libatomic provides "Full support for C/C++ atomic operations as specified in draft 
++      ISO C and C++ documents". See:
++        https://gcc.gnu.org/wiki/Atomic
++
++      libatomic support requires threading.
++
++      The default is 'N'. Say 'Y' if you need it, and report success/failure.
++
+ config CC_GCC_LIBGOMP
+     bool
+     prompt "Compile libgomp"
+diff --git a/scripts/build/cc/gcc.sh b/scripts/build/cc/gcc.sh
+index 851c6003..94bc3898 100644
+--- a/scripts/build/cc/gcc.sh
++++ b/scripts/build/cc/gcc.sh
+@@ -1077,7 +1077,16 @@ do_gcc_backend() {
+     fi
+ 
+     if [ "${CT_THREADS}" = "none" ]; then
++        CT_DoLog EXTRA "Markus: CT_THREADS is none"
+         extra_config+=(--disable-libatomic)
++    else
++        CT_DoLog EXTRA "Markus: CT_THREADS is not none"
++       if [ "${CT_CC_GCC_LIBATMOMIC}" = "y" ]; then
++            CT_DoLog EXTRA "Markus: CT_CC_GCC_LIBATMOMIC is  y"
++            extra_config+=(--enable-libatomic)
++       else
++        CT_DoLog EXTRA "Markus: CT_CC_GCC_LIBATMOMIC is not y"
++       fi 
+     fi
+     if [ "${CT_CC_GCC_LIBMUDFLAP}" = "y" ]; then
+         extra_config+=(--enable-libmudflap)
+@@ -1085,8 +1094,10 @@ do_gcc_backend() {
+         extra_config+=(--disable-libmudflap)
+     fi
+     if [ "${CT_CC_GCC_LIBGOMP}" = "y" ]; then
++        CT_DoLog EXTRA "Markus: CT_CC_GCC_LIBGOMP is y"
+         extra_config+=(--enable-libgomp)
+     else
++        CT_DoLog EXTRA "Markus: CT_CC_GCC_LIBGOMP not y"
+         extra_config+=(--disable-libgomp)
+     fi
+     if [ "${CT_CC_GCC_LIBSSP}" = "y" ]; then
+-- 
+2.17.1
+

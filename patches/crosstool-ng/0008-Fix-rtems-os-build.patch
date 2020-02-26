@@ -1,0 +1,25 @@
+From 90c0bfba6bd2bb94d33577e70e18b779bbb1bf25 Mon Sep 17 00:00:00 2001
+From: kaidoho <kho237115@gmail.com>
+Date: Thu, 20 Feb 2020 22:38:20 +0100
+Subject: [PATCH] Fix RTEMS target
+
+---
+ scripts/build/kernel/rtems.sh | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/scripts/build/kernel/rtems.sh b/scripts/build/kernel/rtems.sh
+index 9ff803fb..62be450d 100644
+--- a/scripts/build/kernel/rtems.sh
++++ b/scripts/build/kernel/rtems.sh
+@@ -5,7 +5,7 @@
+ CT_DoKernelTupleValues()
+ {
+     CT_DoStep INFO "Get RTEMS tuple"
+-    CT_TARGET_KERNEL=zephyr2
++    CT_TARGET_KERNEL=rtems5
+ }
+ 
+ do_kernel_get()
+-- 
+2.17.1
+

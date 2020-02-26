@@ -1,0 +1,38 @@
+From 8809491f5e5498d5e446ff67225b48d4ab1f31bf Mon Sep 17 00:00:00 2001
+From: kaidoho <kho237115@gmail.com>
+Date: Sun, 23 Feb 2020 20:20:36 +0100
+Subject: [PATCH] fix
+
+---
+ config/libc/newlib.in | 8 ++++++--
+ 1 file changed, 6 insertions(+), 2 deletions(-)
+
+diff --git a/config/libc/newlib.in b/config/libc/newlib.in
+index a0ac7e1b..ed5ec981 100644
+--- a/config/libc/newlib.in
++++ b/config/libc/newlib.in
+@@ -1,8 +1,8 @@
+ # newlib options
+ 
+ ## depends on BARE_METAL || RTEMS
+-## select LIBC_SUPPORT_THREADS_NONE if BARE_METAL
+-## select LIBC_SUPPORT_THREADS_NATIVE if RTEMS
++## select LIBC_SUPPORT_THREADS_NONE
++## select LIBC_SUPPORT_THREADS_NATIVE
+ ## select CC_CORE_PASSES_NEEDED if CANADIAN
+ ## select CC_CORE_PASS_2_NEEDED if ! CANADIAN
+ 
+@@ -13,6 +13,10 @@
+ ## help array of processors, and will usually work on any architecture with
+ ## help the addition of a few low-level routines.
+ 
++config THREADS
++    default "rtems"     if THREADS_NATIVE
++    default "none"      if THREADS_NONE
++    
+ # maybe older versions of newlib will support it too, but this
+ # needs to be checked
+ config NEWLIB_CXA_ATEXIT
+-- 
+2.17.1
+
