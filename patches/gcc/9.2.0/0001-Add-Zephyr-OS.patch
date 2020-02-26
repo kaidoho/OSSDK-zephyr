@@ -1,0 +1,1263 @@
+From 955295525412f73e0a6768ad1ad042350e4f3253 Mon Sep 17 00:00:00 2001
+From: kaidoho <kho237115@gmail.com>
+Date: Wed, 26 Feb 2020 19:51:44 +0100
+Subject: [PATCH] Add Zephyr OS
+
+---
+ config.sub                            |   2 +-
+ config/gthr.m4                        |   1 +
+ configure                             |   6 +
+ configure.ac                          |   6 +
+ gcc/config.gcc                        |  86 ++++++++-
+ gcc/config/aarch64/zephyr.h           |  33 ++++
+ gcc/config/arm/zephyr.h               |  36 ++++
+ gcc/config/i386/zephyr.h              |  34 ++++
+ gcc/config/microblaze/zephyr.h        |  31 ++++
+ gcc/config/mips/zephyr.h              |  38 ++++
+ gcc/config/nios2/zephyr.h             |  37 ++++
+ gcc/config/riscv/zephyr.h             |  31 ++++
+ gcc/config/t-zephyr                   |   2 +
+ gcc/config/zephyr.h                   |  32 ++++
+ gcc/config/zephyr.opt                 |  29 ++++
+ gcc/configure                         |   2 +-
+ libatomic/config/zephyr/host-config.h |  41 +++++
+ libatomic/config/zephyr/lock.c        |  37 ++++
+ libatomic/configure.tgt               |   5 +
+ libgcc/config.host                    |  26 +--
+ libgcc/config/gthr-zephyr.h           | 239 ++++++++++++++++++++++++++
+ libgcc/configure                      |   1 +
+ libstdc++-v3/acinclude.m4             |   5 +-
+ libstdc++-v3/configure                |   8 +-
+ libstdc++-v3/configure.host           |   5 +
+ libstdc++-v3/crossconfig.m4           |   2 +-
+ 26 files changed, 751 insertions(+), 24 deletions(-)
+ create mode 100644 gcc/config/aarch64/zephyr.h
+ create mode 100644 gcc/config/arm/zephyr.h
+ create mode 100644 gcc/config/i386/zephyr.h
+ create mode 100644 gcc/config/microblaze/zephyr.h
+ create mode 100644 gcc/config/mips/zephyr.h
+ create mode 100644 gcc/config/nios2/zephyr.h
+ create mode 100644 gcc/config/riscv/zephyr.h
+ create mode 100644 gcc/config/t-zephyr
+ create mode 100644 gcc/config/zephyr.h
+ create mode 100644 gcc/config/zephyr.opt
+ create mode 100644 libatomic/config/zephyr/host-config.h
+ create mode 100644 libatomic/config/zephyr/lock.c
+ create mode 100644 libgcc/config/gthr-zephyr.h
+
+diff --git a/config.sub b/config.sub
+index 75bb6a313..b81a95093 100755
+--- a/config.sub
++++ b/config.sub
+@@ -1363,7 +1363,7 @@ case $os in
+ 	     | powermax* | dnix* | nx6 | nx7 | sei* | dragonfly* \
+ 	     | skyos* | haiku* | rdos* | toppers* | drops* | es* \
+ 	     | onefs* | tirtos* | phoenix* | fuchsia* | redox* | bme* \
+-	     | midnightbsd* | amdhsa* | unleashed* | emscripten*)
++	     | midnightbsd* | amdhsa* | unleashed* | emscripten* | zephyr*)
+ 	# Remember, each alternative MUST END IN *, to match a version number.
+ 		;;
+ 	qnx*)
+diff --git a/config/gthr.m4 b/config/gthr.m4
+index 7b29f1f33..265639b70 100644
+--- a/config/gthr.m4
++++ b/config/gthr.m4
+@@ -21,6 +21,7 @@ case $1 in
+     tpf)	thread_header=config/s390/gthr-tpf.h ;;
+     vxworks)	thread_header=config/gthr-vxworks.h ;;
+     win32)	thread_header=config/i386/gthr-win32.h ;;
++    zephyr)	thread_header=config/gthr-zephyr.h ;;
+ esac
+ AC_SUBST(thread_header)
+ ])
+diff --git a/configure b/configure
+index abd93a990..ef578bb0c 100755
+--- a/configure
++++ b/configure
+@@ -3460,6 +3460,9 @@ case "${target}" in
+   *-*-vxworks*)
+     noconfigdirs="$noconfigdirs target-libffi"
+     ;;
++  *-*-zephyr*)
++    noconfigdirs="$noconfigdirs target-libffi"
++    ;;
+   aarch64*-*-freebsd*)
+     noconfigdirs="$noconfigdirs target-libffi"
+     ;;
+@@ -3706,6 +3709,9 @@ case "${target}" in
+     ;;
+   *-*-vxworks*)
+     ;;
++  *-*-zephyr*)
++    noconfigdirs="$noconfigdirs target-libgloss"
++    ;;
+   alpha*-dec-osf*)
+     # ld works, but does not support shared libraries.
+     # gas doesn't generate exception information.
+diff --git a/configure.ac b/configure.ac
+index 9db4fd14a..9ee49b7e7 100644
+--- a/configure.ac
++++ b/configure.ac
+@@ -742,6 +742,9 @@ case "${target}" in
+   *-*-vxworks*)
+     noconfigdirs="$noconfigdirs target-libffi"
+     ;;
++  *-*-zephyr*)
++    noconfigdirs="$noconfigdirs target-libffi"
++    ;;
+   aarch64*-*-freebsd*)
+     noconfigdirs="$noconfigdirs target-libffi"
+     ;;
+@@ -988,6 +991,9 @@ case "${target}" in
+     ;;
+   *-*-vxworks*)
+     ;;
++  *-*-zephyr*)
++    noconfigdirs="$noconfigdirs target-libgloss"
++    ;;
+   alpha*-dec-osf*)
+     # ld works, but does not support shared libraries.
+     # gas doesn't generate exception information.
+diff --git a/gcc/config.gcc b/gcc/config.gcc
+index ddd3b8f4d..87f06158c 100644
+--- a/gcc/config.gcc
++++ b/gcc/config.gcc
+@@ -970,6 +970,20 @@ case ${target} in
+       ;;
+   esac
+   ;;
++*-*-zephyr*)
++  case ${enable_threads} in
++    "" | yes | zephyr) thread_file='zephyr' ;;
++    no) ;;
++    *)
++      echo 'Unknown thread configuration for Zephyr OS'
++      exit 1
++      ;;
++  esac
++  tmake_file="${tmake_file} t-zephyr"
++  extra_options="${extra_options} zephyr.opt"
++  default_use_cxa_atexit=yes
++  use_gcc_stdint=wrap
++  ;;
+ *-*-elf|arc*-*-elf*)
+   # Assume that newlib is being used and so __cxa_atexit is provided.
+   default_use_cxa_atexit=yes
+@@ -978,7 +992,7 @@ case ${target} in
+ esac
+ 
+ case ${target} in
+-aarch64*-*-elf | aarch64*-*-fuchsia* | aarch64*-*-rtems*)
++aarch64*-*-elf | aarch64*-*-fuchsia* | aarch64*-*-rtems* | aarch64*-*-zephyr*)
+ 	tm_file="${tm_file} dbxelf.h elfos.h newlib-stdint.h"
+ 	tm_file="${tm_file} aarch64/aarch64-elf.h aarch64/aarch64-elf-raw.h"
+ 	tmake_file="${tmake_file} aarch64/t-aarch64"
+@@ -986,12 +1000,15 @@ aarch64*-*-elf | aarch64*-*-fuchsia* | aarch64*-*-rtems*)
+ 	aarch64-*-elf*)
+ 		use_gcc_stdint=wrap
+ 		;;
+-        aarch64-*-fuchsia*)
+-                tm_file="${tm_file} fuchsia.h"
+-                ;;
++	aarch64-*-fuchsia*)
++		tm_file="${tm_file} fuchsia.h"
++		;;
+ 	aarch64-*-rtems*)
+ 	  	tm_file="${tm_file} rtems.h aarch64/rtems.h"
+ 		;;
++	aarch64-*-zephyr*)
++	  	tm_file="${tm_file} zephyr.h aarch64/zephyr.h"
++		;;			
+ 	esac
+ 	case $target in
+ 	aarch64_be-*)
+@@ -1072,7 +1089,7 @@ alpha*-dec-*vms*)
+ 	tm_file="${tm_file} vms/vms.h alpha/vms.h"
+ 	tmake_file="${tmake_file} alpha/t-vms alpha/t-alpha"
+ 	;;
+-arc*-*-elf*)
++arc*-*-elf* | arc*-*-zephyr*)
+ 	tm_file="arc/arc-arch.h dbxelf.h elfos.h newlib-stdint.h arc/elf.h ${tm_file}"
+ 	tmake_file="arc/t-multilib arc/t-arc"
+ 	extra_gcc_objs="driver-arc.o"
+@@ -1085,6 +1102,13 @@ arc*-*-elf*)
+ 		*)				with_endian=little ;;
+ 		esac
+ 	fi
++
++	case ${target} in
++	arc*-*-zephyr*)
++	  tm_file="${tm_file} zephyr.h arc/zephyr.h
++	  ;;
++	esac
++
+ 	case ${with_endian} in
+ 	big|little)		;;
+ 	*)	echo "with_endian=${with_endian} not supported."; exit 1 ;;
+@@ -1208,7 +1232,7 @@ arm*-*-phoenix*)
+ 	tmake_file="${tmake_file} arm/t-arm arm/t-bpabi arm/t-phoenix"
+ 	target_cpu_cname="arm7tdmi"
+ 	;;
+-arm*-*-eabi* | arm*-*-symbianelf* | arm*-*-rtems* | arm*-*-fuchsia*)
++arm*-*-eabi* | arm*-*-symbianelf* | arm*-*-rtems* | arm*-*-fuchsia* | arm*-*-zephyr*)
+ 	case ${target} in
+ 	arm*eb-*-eabi*)
+ 	  tm_defines="${tm_defines} TARGET_BIG_ENDIAN_DEFAULT=1"
+@@ -1239,6 +1263,10 @@ arm*-*-eabi* | arm*-*-symbianelf* | arm*-*-rtems* | arm*-*-fuchsia*)
+ 	  tmake_file="${tmake_file} arm/t-symbian"
+ 	  target_cpu_cname="arm10tdmi"
+ 	  ;;
++	arm*-*-zephyr*)
++	  tm_file="${tm_file} zephyr.h arm/zephyr.h newlib-stdint.h"
++	  tmake_file="${tmake_file} arm/t-bpabi arm/t-zephyr"
++	  ;;	  
+ 	esac
+ 	tm_file="${tm_file} arm/aout.h arm/arm.h"
+ 	;;
+@@ -1641,6 +1669,9 @@ x86_64-*-elf*)
+ x86_64-*-rtems*)
+ 	tm_file="${tm_file} i386/unix.h i386/att.h dbxelf.h elfos.h newlib-stdint.h i386/i386elf.h i386/x86-64.h i386/rtemself.h rtems.h"
+ 	;;
++x86_64-*-zephyr*)
++	tm_file="${tm_file} i386/unix.h i386/att.h dbxelf.h elfos.h newlib-stdint.h i386/i386elf.h i386/x86-64.h i386/zephyr.h zephyr.h"
++	;;	
+ i[34567]86-*-rdos*)
+     tm_file="${tm_file} i386/unix.h i386/att.h dbxelf.h elfos.h newlib-stdint.h i386/i386elf.h i386/rdos.h"
+     ;;
+@@ -1808,6 +1839,10 @@ i[34567]86-*-rtems*)
+ 	tm_file="${tm_file} i386/unix.h i386/att.h dbxelf.h elfos.h i386/i386elf.h i386/rtemself.h rtems.h newlib-stdint.h"
+ 	tmake_file="${tmake_file} i386/t-rtems"
+ 	;;
++i[34567]86-*-zephyr*)
++	tm_file="${tm_file} i386/unix.h i386/att.h dbxelf.h elfos.h i386/i386elf.h i386/zephyr.h zephyr.h newlib-stdint.h"
++	tmake_file="${tmake_file} i386/t-zephyr"
++	;;	
+ i[34567]86-*-solaris2* | x86_64-*-solaris2.1[0-9]*)
+ 	# Set default arch_32 to pentium4, tune_32 to generic like the other
+ 	# i386 targets, although config.guess defaults to i386-pc-solaris2*.
+@@ -2185,6 +2220,22 @@ microblaze*-*-rtems*)
+ 	tmake_file="${tmake_file} microblaze/t-microblaze"
+ 	tmake_file="${tmake_file} microblaze/t-rtems"
+         ;;
++microblaze*-*-zephyr*)
++	case $target in
++		microblazeel-*)
++			tm_defines="${tm_defines} TARGET_BIG_ENDIAN_DEFAULT=0"
++			;;
++		microblaze-*)
++			tm_defines="${tm_defines} TARGET_BIG_ENDIAN_DEFAULT=4321"
++			;;
++	esac
++	tm_file="${tm_file} dbxelf.h"
++	tm_file="${tm_file} microblaze/zephyr.h zephyr.h newlib-stdint.h"
++	c_target_objs="${c_target_objs} microblaze-c.o"
++	cxx_target_objs="${cxx_target_objs} microblaze-c.o"
++	tmake_file="${tmake_file} microblaze/t-microblaze"
++	tmake_file="${tmake_file} microblaze/t-zephyr"
++        ;;		
+ microblaze*-*-elf)
+ 	case $target in
+ 		microblazeel-*)
+@@ -2213,13 +2264,17 @@ riscv*-*-linux*)
+ 	# automatically detect that GAS supports it, yet we require it.
+ 	gcc_cv_initfini_array=yes
+ 	;;
+-riscv*-*-elf* | riscv*-*-rtems*)
++riscv*-*-elf* | riscv*-*-rtems* | riscv*-*-zephyr*)
+ 	tm_file="elfos.h newlib-stdint.h ${tm_file} riscv/elf.h"
+ 	case ${target} in
+ 	*-*-rtems*)
+ 	  tm_file="${tm_file} rtems.h riscv/rtems.h"
+ 	  tmake_file="${tmake_file} riscv/t-rtems"
+ 	  ;;
++	*-*-zephyr*)
++	  tm_file="${tm_file} zephyr.h riscv/zephyr.h"
++	  tmake_file="${tmake_file} riscv/t-zephyr"
++	  ;;	  
+ 	*)
+ 	  case "x${enable_multilib}" in
+ 	  xno) ;;
+@@ -2449,6 +2504,10 @@ mips*-*-rtems*)
+ 	tm_file="elfos.h newlib-stdint.h ${tm_file} mips/elf.h mips/rtems.h rtems.h"
+ 	tmake_file="${tmake_file} mips/t-elf mips/t-rtems"
+ 	;;
++mips*-*-zephyr*)
++	tm_file="elfos.h newlib-stdint.h ${tm_file} mips/elf.h mips/zephyr.h zephyr.h"
++	tmake_file="${tmake_file} mips/t-elf mips/t-zephyr"
++	;;	
+ mips-wrs-vxworks)
+ 	tm_file="elfos.h ${tm_file} mips/elf.h vx-common.h vxworks.h mips/vxworks.h"
+ 	tmake_file="${tmake_file} mips/t-vxworks"
+@@ -2524,6 +2583,10 @@ nios2-*-*)
+ 		tm_file="${tm_file} newlib-stdint.h nios2/rtems.h rtems.h"
+ 		tmake_file="${tmake_file} t-rtems nios2/t-rtems"
+ 		;;
++	nios2-*-zephyr*)
++		tm_file="${tm_file} newlib-stdint.h nios2/zephyr.h zephyr.h"
++		tmake_file="${tmake_file} t-zephyr nios2/t-zephyr"
++		;;		
+         esac
+ 	;;
+ nvptx-*)
+@@ -3021,6 +3084,10 @@ sparc-*-rtems*)
+ 	tm_file="${tm_file} dbxelf.h elfos.h sparc/sysv4.h sparc/sp-elf.h sparc/rtemself.h rtems.h newlib-stdint.h"
+ 	tmake_file="${tmake_file} sparc/t-sparc sparc/t-rtems"
+ 	;;
++sparc-*-zephyr*)
++	tm_file="${tm_file} dbxelf.h elfos.h sparc/sysv4.h sparc/sp-elf.h sparc/zephyr.h zephyr.h newlib-stdint.h"
++	tmake_file="${tmake_file} sparc/t-sparc sparc/t-zephyr"
++	;;	
+ sparc-*-linux*)
+ 	tm_file="${tm_file} dbxelf.h elfos.h sparc/sysv4.h gnu-user.h linux.h glibc-stdint.h sparc/tso.h"
+ 	extra_options="${extra_options} sparc/long-double-switch.opt"
+@@ -3075,6 +3142,11 @@ sparc64-*-rtems*)
+ 	extra_options="${extra_options}"
+ 	tmake_file="${tmake_file} sparc/t-sparc sparc/t-rtems-64"
+ 	;;
++sparc64-*-zephyr*)
++	tm_file="${tm_file} dbxelf.h elfos.h newlib-stdint.h sparc/sysv4.h sparc/sp64-elf.h sparc/zephyr.h zephyr.h"
++	extra_options="${extra_options}"
++	tmake_file="${tmake_file} sparc/t-sparc sparc/t-zephyr-64"
++	;;	
+ sparc64-*-linux*)
+ 	tm_file="sparc/biarch64.h ${tm_file} dbxelf.h elfos.h sparc/sysv4.h gnu-user.h linux.h glibc-stdint.h sparc/default64.h sparc/linux64.h sparc/tso.h"
+ 	extra_options="${extra_options} sparc/long-double-switch.opt"
+diff --git a/gcc/config/aarch64/zephyr.h b/gcc/config/aarch64/zephyr.h
+new file mode 100644
+index 000000000..1f25389cb
+--- /dev/null
++++ b/gcc/config/aarch64/zephyr.h
+@@ -0,0 +1,33 @@
++/* Definitions for ZephyrOS based AARCH64 system.
++   Copyright (C) 2020 Free Software Foundation, Inc.
++
++   This file is part of GCC.
++
++   GCC is free software; you can redistribute it and/or modify it
++   under the terms of the GNU General Public License as published
++   by the Free Software Foundation; either version 3, or (at your
++   option) any later version.
++
++   GCC is distributed in the hope that it will be useful, but WITHOUT
++   ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
++   or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public
++   License for more details.
++
++   Under Section 7 of GPL version 3, you are granted additional
++   permissions described in the GCC Runtime Library Exception, version
++   3.1, as published by the Free Software Foundation.
++
++   You should have received a copy of the GNU General Public License and
++   a copy of the GCC Runtime Library Exception along with this program;
++   see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see
++   <http://www.gnu.org/licenses/>.  */
++
++#define HAS_INIT_SECTION
++
++#undef TARGET_OS_CPP_BUILTINS
++#define TARGET_OS_CPP_BUILTINS()		\
++    do {					\
++	builtin_define ("__zephyr__");		\
++	builtin_define ("__USE_INIT_FINI__");	\
++	builtin_assert ("system=zephyr");	\
++    } while (0)
+diff --git a/gcc/config/arm/zephyr.h b/gcc/config/arm/zephyr.h
+new file mode 100644
+index 000000000..7784fc6df
+--- /dev/null
++++ b/gcc/config/arm/zephyr.h
+@@ -0,0 +1,36 @@
++/* Definitions for ZephyrOS based ARM systems using EABI.
++   Copyright (C) 2020 Free Software Foundation, Inc.
++
++   This file is part of GCC.
++
++   GCC is free software; you can redistribute it and/or modify it
++   under the terms of the GNU General Public License as published
++   by the Free Software Foundation; either version 3, or (at your
++   option) any later version.
++
++   GCC is distributed in the hope that it will be useful, but WITHOUT
++   ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
++   or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public
++   License for more details.
++
++   Under Section 7 of GPL version 3, you are granted additional
++   permissions described in the GCC Runtime Library Exception, version
++   3.1, as published by the Free Software Foundation.
++
++   You should have received a copy of the GNU General Public License and
++   a copy of the GCC Runtime Library Exception along with this program;
++   see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see
++   <http://www.gnu.org/licenses/>.  */
++
++#define HAS_INIT_SECTION
++
++#undef TARGET_OS_CPP_BUILTINS
++#define TARGET_OS_CPP_BUILTINS()		\
++    do {					\
++	builtin_define ("__zephyr__");		\
++	builtin_define ("__USE_INIT_FINI__");	\
++	builtin_assert ("system=zephyr");	\
++	TARGET_BPABI_CPP_BUILTINS();    	\
++    } while (0)
++
++#define ARM_DEFAULT_SHORT_ENUMS false
+diff --git a/gcc/config/i386/zephyr.h b/gcc/config/i386/zephyr.h
+new file mode 100644
+index 000000000..e665cbcc6
+--- /dev/null
++++ b/gcc/config/i386/zephyr.h
+@@ -0,0 +1,34 @@
++/* Definitions for Zephyr OS based x86 systems with ELF format.
++   Copyright (C) 2020 Free Software Foundation, Inc.
++
++   This file is part of GCC.
++
++   GCC is free software; you can redistribute it and/or modify it
++   under the terms of the GNU General Public License as published
++   by the Free Software Foundation; either version 3, or (at your
++   option) any later version.
++
++   GCC is distributed in the hope that it will be useful, but WITHOUT
++   ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
++   or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public
++   License for more details.
++
++   Under Section 7 of GPL version 3, you are granted additional
++   permissions described in the GCC Runtime Library Exception, version
++   3.1, as published by the Free Software Foundation.
++
++   You should have received a copy of the GNU General Public License and
++   a copy of the GCC Runtime Library Exception along with this program;
++   see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see
++   <http://www.gnu.org/licenses/>.  */
++
++/* Specify predefined symbols in preprocessor.  */
++
++#define TARGET_OS_CPP_BUILTINS()		\
++  do						\
++    {						\
++	builtin_define ("__zephyr__");		\
++	builtin_define ("__USE_INIT_FINI__");	\
++	builtin_assert ("system=zephyr");	\
++    }						\
++  while (0)
+diff --git a/gcc/config/microblaze/zephyr.h b/gcc/config/microblaze/zephyr.h
+new file mode 100644
+index 000000000..038ee5acb
+--- /dev/null
++++ b/gcc/config/microblaze/zephyr.h
+@@ -0,0 +1,31 @@
++/* Definitions for Zephyr OS base microblaze systems using ELF.
++   Copyright (C) 2020 Free Software Foundation, Inc.
++
++   This file is part of GCC.
++
++   GCC is free software; you can redistribute it and/or modify it
++   under the terms of the GNU General Public License as published
++   by the Free Software Foundation; either version 3, or (at your
++   option) any later version.
++
++   GCC is distributed in the hope that it will be useful, but WITHOUT
++   ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
++   or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public
++   License for more details.
++
++   Under Section 7 of GPL version 3, you are granted additional
++   permissions described in the GCC Runtime Library Exception, version
++   3.1, as published by the Free Software Foundation.
++
++   You should have received a copy of the GNU General Public License and
++   a copy of the GCC Runtime Library Exception along with this program;
++   see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see
++   <http://www.gnu.org/licenses/>.  */
++
++/* Specify predefined symbols in preprocessor.  */
++
++#define TARGET_OS_CPP_BUILTINS() do {		\
++  builtin_define( "__zephyr__" );		\
++  builtin_assert( "system=zephyr" );		\
++} while (0)
++
+diff --git a/gcc/config/mips/zephyr.h b/gcc/config/mips/zephyr.h
+new file mode 100644
+index 000000000..70d14e807
+--- /dev/null
++++ b/gcc/config/mips/zephyr.h
+@@ -0,0 +1,38 @@
++/* Definitions for Zephyr OS base mips systems using ELF.
++   Copyright (C) 2020 Free Software Foundation, Inc.
++
++   This file is part of GCC.
++
++   GCC is free software; you can redistribute it and/or modify it
++   under the terms of the GNU General Public License as published
++   by the Free Software Foundation; either version 3, or (at your
++   option) any later version.
++
++   GCC is distributed in the hope that it will be useful, but WITHOUT
++   ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
++   or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public
++   License for more details.
++
++   Under Section 7 of GPL version 3, you are granted additional
++   permissions described in the GCC Runtime Library Exception, version
++   3.1, as published by the Free Software Foundation.
++
++   You should have received a copy of the GNU General Public License and
++   a copy of the GCC Runtime Library Exception along with this program;
++   see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see
++   <http://www.gnu.org/licenses/>.  */
++
++/* Specify predefined symbols in preprocessor.  */
++
++#define TARGET_OS_CPP_BUILTINS()	\
++do {					\
++  builtin_define ("__zephyr__");		\
++  builtin_define ("__USE_INIT_FINI__");	\
++  builtin_assert ("system=zephyr");	\
++} while (0)
++
++/* No sdata.
++ * The RTEMS BSPs expect -G0
++ */
++#undef MIPS_DEFAULT_GVALUE
++#define MIPS_DEFAULT_GVALUE 0
+diff --git a/gcc/config/nios2/zephyr.h b/gcc/config/nios2/zephyr.h
+new file mode 100644
+index 000000000..59e5f3408
+--- /dev/null
++++ b/gcc/config/nios2/zephyr.h
+@@ -0,0 +1,37 @@
++/* Definitions for Zephyr OS NIOS2 systems using ELF.
++   Copyright (C) 2011-2019 Free Software Foundation, Inc.
++
++   This file is part of GCC.
++
++   GCC is free software; you can redistribute it and/or modify it
++   under the terms of the GNU General Public License as published
++   by the Free Software Foundation; either version 3, or (at your
++   option) any later version.
++
++   GCC is distributed in the hope that it will be useful, but WITHOUT
++   ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
++   or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public
++   License for more details.
++
++   Under Section 7 of GPL version 3, you are granted additional
++   permissions described in the GCC Runtime Library Exception, version
++   3.1, as published by the Free Software Foundation.
++
++   You should have received a copy of the GNU General Public License and
++   a copy of the GCC Runtime Library Exception along with this program;
++   see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see
++   <http://www.gnu.org/licenses/>.  */
++
++/* Specify predefined symbols in preprocessor.  */
++#define TARGET_OS_CPP_BUILTINS()        \
++do {                                    \
++  builtin_define ("__zephyr__");         \
++  builtin_define ("__USE_INIT_FINI__"); \
++  builtin_assert ("system=zephyr");      \
++} while (0)
++
++/* This toolchain implements the ABI for Linux Systems documented in the
++   Nios II Processor Reference Handbook.
++
++   This is done so RTEMS targets have Thread Local Storage like Linux.  */
++#define TARGET_LINUX_ABI 1
+diff --git a/gcc/config/riscv/zephyr.h b/gcc/config/riscv/zephyr.h
+new file mode 100644
+index 000000000..a82ff4ca7
+--- /dev/null
++++ b/gcc/config/riscv/zephyr.h
+@@ -0,0 +1,31 @@
++/* Definitions for Zephyr OS based RISC-V systems with ELF format.
++   Copyright (C) 2020 Free Software Foundation, Inc.
++
++   This file is part of GCC.
++
++   GCC is free software; you can redistribute it and/or modify it
++   under the terms of the GNU General Public License as published
++   by the Free Software Foundation; either version 3, or (at your
++   option) any later version.
++
++   GCC is distributed in the hope that it will be useful, but WITHOUT
++   ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
++   or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public
++   License for more details.
++
++   Under Section 7 of GPL version 3, you are granted additional
++   permissions described in the GCC Runtime Library Exception, version
++   3.1, as published by the Free Software Foundation.
++
++   You should have received a copy of the GNU General Public License and
++   a copy of the GCC Runtime Library Exception along with this program;
++   see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see
++   <http://www.gnu.org/licenses/>.  */
++
++#undef TARGET_OS_CPP_BUILTINS
++#define TARGET_OS_CPP_BUILTINS()		\
++    do {					\
++	builtin_define ("__zephyr__");		\
++	builtin_define ("__USE_INIT_FINI__");	\
++	builtin_assert ("system=zephyr");	\
++    } while (0)
+diff --git a/gcc/config/t-zephyr b/gcc/config/t-zephyr
+new file mode 100644
+index 000000000..6a5c402ce
+--- /dev/null
++++ b/gcc/config/t-zephyr
+@@ -0,0 +1,2 @@
++# Add something here if required
++
+diff --git a/gcc/config/zephyr.h b/gcc/config/zephyr.h
+new file mode 100644
+index 000000000..3694b27c4
+--- /dev/null
++++ b/gcc/config/zephyr.h
+@@ -0,0 +1,32 @@
++/* Configuration common to all targets running Zephyr OS. 
++   Copyright (C) 2000-2019 Free Software Foundation, Inc.
++
++   This file is part of GCC.
++
++   GCC is free software; you can redistribute it and/or modify it
++   under the terms of the GNU General Public License as published
++   by the Free Software Foundation; either version 3, or (at your
++   option) any later version.
++
++   GCC is distributed in the hope that it will be useful, but WITHOUT
++   ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
++   or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public
++   License for more details.
++
++   Under Section 7 of GPL version 3, you are granted additional
++   permissions described in the GCC Runtime Library Exception, version
++   3.1, as published by the Free Software Foundation.
++
++   You should have received a copy of the GNU General Public License and
++   a copy of the GCC Runtime Library Exception along with this program;
++   see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see
++   <http://www.gnu.org/licenses/>.  */
++
++
++#undef STARTFILE_SPEC
++#define STARTFILE_SPEC "crt0.o%s"
++
++#undef ENDFILE_SPEC
++#define ENDFILE_SPEC   ""
++
++
+diff --git a/gcc/config/zephyr.opt b/gcc/config/zephyr.opt
+new file mode 100644
+index 000000000..7618ed3a9
+--- /dev/null
++++ b/gcc/config/zephyr.opt
+@@ -0,0 +1,29 @@
++; Zephyr OS options.
++
++; Copyright (C) 2010-2019 Free Software Foundation, Inc.
++;
++; This file is part of GCC.
++;
++; GCC is free software; you can redistribute it and/or modify it under
++; the terms of the GNU General Public License as published by the Free
++; Software Foundation; either version 3, or (at your option) any later
++; version.
++;
++; GCC is distributed in the hope that it will be useful, but WITHOUT ANY
++; WARRANTY; without even the implied warranty of MERCHANTABILITY or
++; FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
++; for more details.
++;
++; You should have received a copy of the GNU General Public License
++; along with GCC; see the file COPYING3.  If not see
++; <http://www.gnu.org/licenses/>.
++
++; See the GCC internals manual (options.texi) for a description of
++; this file's format.
++
++; Please try to keep this file in ASCII collating order.
++
++pthread
++Ignore
++
++; This comment is to ensure we retain the blank line above.
+diff --git a/gcc/configure b/gcc/configure
+index 481071b42..8ef2f7b4a 100755
+--- a/gcc/configure
++++ b/gcc/configure
+@@ -11861,7 +11861,7 @@ case ${enable_threads} in
+     target_thread_file='single'
+     ;;
+   aix | dce | lynx | mipssde | posix | rtems | \
+-  single | tpf | vxworks | win32)
++  single | tpf | vxworks | win32 | zephyr)
+     target_thread_file=${enable_threads}
+     ;;
+   *)
+diff --git a/libatomic/config/zephyr/host-config.h b/libatomic/config/zephyr/host-config.h
+new file mode 100644
+index 000000000..05cfdb882
+--- /dev/null
++++ b/libatomic/config/zephyr/host-config.h
+@@ -0,0 +1,41 @@
++/* Copyright (C) 2016-2020 Free Software Foundation, Inc.
++   Contributed by Markus Bernd Moessner <kho237115@gmail.com>.
++
++   This file is part of the GNU Atomic Library (libatomic).
++
++   Libatomic is free software; you can redistribute it and/or modify it
++   under the terms of the GNU General Public License as published by
++   the Free Software Foundation; either version 3 of the License, or
++   (at your option) any later version.
++
++   Libatomic is distributed in the hope that it will be useful, but WITHOUT ANY
++   WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
++   FOR A PARTICULAR PURPOSE.  See the GNU General Public License for
++   more details.
++
++   Under Section 7 of GPL version 3, you are granted additional
++   permissions described in the GCC Runtime Library Exception, version
++   3.1, as published by the Free Software Foundation.
++
++   You should have received a copy of the GNU General Public License and
++   a copy of the GCC Runtime Library Exception along with this program;
++   see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see
++   <http://www.gnu.org/licenses/>.  */
++
++/* Included after all more target-specific host-config.h.  */
++
++#include <machine/_libatomic.h>
++
++static inline UWORD
++protect_start (void *ptr)
++{
++  return _z_libatomic_protect_start (ptr);
++}
++
++static inline void
++protect_end (void *ptr, UWORD isr_level)
++{
++  _z_libatomic_protect_end (ptr, isr_level);
++}
++
++#include_next <host-config.h>
+diff --git a/libatomic/config/zephyr/lock.c b/libatomic/config/zephyr/lock.c
+new file mode 100644
+index 000000000..b9dc73ea9
+--- /dev/null
++++ b/libatomic/config/zephyr/lock.c
+@@ -0,0 +1,37 @@
++/* Copyright (C) 2016-2020 Free Software Foundation, Inc.
++   Contributed by Markus Bernd Moessner <kho237115@gmail.com>.
++
++   This file is part of the GNU Atomic Library (libatomic).
++
++   Libatomic is free software; you can redistribute it and/or modify it
++   under the terms of the GNU General Public License as published by
++   the Free Software Foundation; either version 3 of the License, or
++   (at your option) any later version.
++
++   Libatomic is distributed in the hope that it will be useful, but WITHOUT ANY
++   WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
++   FOR A PARTICULAR PURPOSE.  See the GNU General Public License for
++   more details.
++
++   Under Section 7 of GPL version 3, you are granted additional
++   permissions described in the GCC Runtime Library Exception, version
++   3.1, as published by the Free Software Foundation.
++
++   You should have received a copy of the GNU General Public License and
++   a copy of the GCC Runtime Library Exception along with this program;
++   see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see
++   <http://www.gnu.org/licenses/>.  */
++
++#include "libatomic_i.h"
++
++void
++libat_lock_n (void *ptr, size_t n)
++{
++  _z_libatomic_lock_n (ptr, n);
++}
++
++void
++libat_unlock_n (void *ptr, size_t n)
++{
++  _z_libatomic_unlock_n (ptr, n);
++}
+diff --git a/libatomic/configure.tgt b/libatomic/configure.tgt
+index ecbb7d33c..e8a31edc4 100644
+--- a/libatomic/configure.tgt
++++ b/libatomic/configure.tgt
+@@ -158,6 +158,11 @@ case "${target}" in
+ 	XCFLAGS="${configure_tgt_pre_target_cpu_XCFLAGS}"
+ 	config_path="rtems"
+ 	;;
++	
++  *-*-zephyr*)
++	XCFLAGS="${configure_tgt_pre_target_cpu_XCFLAGS}"
++	config_path="zephyr"
++	;;
+ 
+   *-*-elf*)
+ 	# ??? No target OS.  We could be targeting bare-metal kernel-mode,
+diff --git a/libgcc/config.host b/libgcc/config.host
+index 91abc84da..417284bfe 100644
+--- a/libgcc/config.host
++++ b/libgcc/config.host
+@@ -321,6 +321,10 @@ case ${host} in
+ *-*-vxworks*)
+   tmake_file=t-vxworks
+   ;;
++*-*-zephyr*)
++  tmake_file="$tmake_file t-zephyr"
++  extra_parts="crtbegin.o crtend.o"
++  ;;  
+ *-*-elf)
+   extra_parts="crtbegin.o crtend.o"
+   ;;
+@@ -343,7 +347,7 @@ i[34567]86-*-cygwin* | x86_64-*-cygwin*)
+ esac
+ 
+ case ${host} in
+-aarch64*-*-elf | aarch64*-*-rtems*)
++aarch64*-*-elf | aarch64*-*-rtems* | aarch64*-*-zephyr*)
+ 	extra_parts="$extra_parts crtbegin.o crtend.o crti.o crtn.o"
+ 	extra_parts="$extra_parts crtfastmath.o"
+ 	tmake_file="${tmake_file} ${cpu_type}/t-aarch64"
+@@ -458,11 +462,11 @@ arm*-*-phoenix*)
+ 	extra_parts="crtbegin.o crtend.o crti.o crtn.o"
+ 	unwind_header=config/arm/unwind-arm.h
+ 	;;
+-arm*-*-eabi* | arm*-*-symbianelf* | arm*-*-rtems*)
++arm*-*-eabi* | arm*-*-symbianelf* | arm*-*-rtems* | arm*-*-zephyr*)
+ 	tmake_file="${tmake_file} arm/t-arm arm/t-elf t-fixedpoint-gnu-prefix"
+ 	tm_file="$tm_file arm/bpabi-lib.h"
+ 	case ${host} in
+-	arm*-*-eabi* | arm*-*-rtems*)
++	arm*-*-eabi* | arm*-*-rtems* | arm*-*-zephyr*)
+ 	  tmake_file="${tmake_file} arm/t-bpabi t-crtfm"
+ 	  extra_parts="crtbegin.o crtend.o crti.o crtn.o"
+ 	  ;;
+@@ -632,10 +636,10 @@ i[34567]86-*-elfiamcu)
+ i[34567]86-*-elf*)
+ 	tmake_file="$tmake_file i386/t-crtstuff t-crtstuff-pic t-libgcc-pic"
+ 	;;
+-x86_64-*-elf* | x86_64-*-rtems*)
++x86_64-*-elf* | x86_64-*-rtems* | x86_64-*-zephyr*)
+ 	tmake_file="$tmake_file i386/t-crtstuff t-crtstuff-pic t-libgcc-pic"
+ 	case ${host} in
+-	  x86_64-*-rtems*)
++	  x86_64-*-rtems* | x86_64-*-zephyr*)
+ 	    extra_parts="$extra_parts crti.o crtn.o"
+ 	    ;;
+ 	esac
+@@ -699,7 +703,7 @@ i[34567]86-*-nto-qnx*)
+ 	tmake_file="$tmake_file i386/t-nto t-libgcc-pic"
+ 	extra_parts=crtbegin.o
+ 	;;
+-i[34567]86-*-rtems*)
++i[34567]86-*-rtems* | i[34567]86-*-zephyr*)
+ 	tmake_file="$tmake_file i386/t-crtstuff t-softfp-sfdftf i386/32/t-softfp i386/t-softfp t-softfp"
+ 	extra_parts="$extra_parts crti.o crtn.o"
+ 	;;
+@@ -904,7 +908,7 @@ microblaze*-*-elf)
+ 	tmake_file="${tmake_file} microblaze/t-microblaze t-fdpbit"
+ 	extra_parts="$extra_parts crtbeginS.o crtendS.o crtbeginT.o crti.o crtn.o"
+ 	;;
+-microblaze*-*-rtems*)
++microblaze*-*-rtems* | microblaze*-*-zephyr*)
+ 	tmake_file="${tmake_file} microblaze/t-microblaze t-fdpbit"
+ 	extra_parts="$extra_parts crtbeginS.o crtendS.o crtbeginT.o crti.o crtn.o"
+ 	;;
+@@ -978,7 +982,7 @@ mips64orion-*-elf* | mips64orionel-*-elf*)
+ 	tmake_file="$tmake_file mips/t-elf mips/t-crtstuff mips/t-mips16"
+ 	extra_parts="$extra_parts crti.o crtn.o"
+ 	;;
+-mips*-*-rtems*)
++mips*-*-rtems* | mips*-*-zephyr*)
+ 	tmake_file="$tmake_file mips/t-elf mips/t-crtstuff mips/t-mips16"
+ 	extra_parts="$extra_parts crti.o crtn.o"
+ 	;;
+@@ -1304,7 +1308,7 @@ sparc-*-linux*)		# SPARC's running GNU/Linux, libc6
+ 	extra_parts="$extra_parts crtfastmath.o"
+ 	md_unwind_header=sparc/linux-unwind.h
+ 	;;
+-sparc-*-rtems*)
++sparc-*-rtems* | sparc-*-zephyr*)
+ 	tmake_file="$tmake_file sparc/t-elf sparc/t-softmul t-crtfm t-fdpbit"
+ 	extra_parts="$extra_parts crti.o crtn.o crtfastmath.o"
+ 	;;
+@@ -1317,7 +1321,7 @@ sparc64-*-elf*)
+ 	tmake_file="${tmake_file} t-crtfm"
+ 	extra_parts="$extra_parts crti.o crtn.o crtfastmath.o"
+ 	;;
+-sparc64-*-rtems*)
++sparc64-*-rtems* | sparc64-*-zephyr*)
+ 	tmake_file="$tmake_file t-crtfm"
+ 	extra_parts="$extra_parts crti.o crtn.o crtfastmath.o"
+ 	;;
+@@ -1445,7 +1449,7 @@ i[34567]86-*-linux* | x86_64-*-linux* | \
+ esac
+ 
+ case ${host} in
+-i[34567]86-*-elfiamcu | i[34567]86-*-rtems*)
++i[34567]86-*-elfiamcu | i[34567]86-*-rtems* | i[34567]86-*-zephyr*)
+ 	# These use soft-fp for SFmode and DFmode, not just TFmode.
+ 	;;
+ i[34567]86-*-* | x86_64-*-*)
+diff --git a/libgcc/config/gthr-zephyr.h b/libgcc/config/gthr-zephyr.h
+new file mode 100644
+index 000000000..37a6e13bd
+--- /dev/null
++++ b/libgcc/config/gthr-zephyr.h
+@@ -0,0 +1,239 @@
++/* Zephyr threads compatibility routines for libgcc2 and libobjc.
++   by: M.B.Moessner (based on gthr-rtems.h) */
++/* Compile this one with gcc.  */
++/* Copyright (C) 1997-2019 Free Software Foundation, Inc.
++
++This file is part of GCC.
++
++GCC is free software; you can redistribute it and/or modify it under
++the terms of the GNU General Public License as published by the Free
++Software Foundation; either version 3, or (at your option) any later
++version.
++
++GCC is distributed in the hope that it will be useful, but WITHOUT ANY
++WARRANTY; without even the implied warranty of MERCHANTABILITY or
++FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
++for more details.
++
++Under Section 7 of GPL version 3, you are granted additional
++permissions described in the GCC Runtime Library Exception, version
++3.1, as published by the Free Software Foundation.
++
++You should have received a copy of the GNU General Public License and
++a copy of the GCC Runtime Library Exception along with this program;
++see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see
++<http://www.gnu.org/licenses/>.  */
++
++#ifndef GCC_GTHR_ZEPHYR_H
++#define GCC_GTHR_ZEPHYR_H
++
++#include <sys/lock.h>
++#include <stdint.h>
++#include <sched.h>
++
++#ifdef __cplusplus
++extern "C" {
++#endif
++
++#define __GTHREADS 1
++#define __GTHREADS_CXX0X 1
++#define __GTHREAD_HAS_COND 1
++
++
++typedef struct _z_gthread_sem_t  __gthread_mutex_t;
++typedef struct _z_gthread_mutex_t __gthread_recursive_mutex_t;
++typedef struct _z_gthread_cond_t __gthread_cond_t;
++typedef struct timespec __gthread_time_t;
++
++typedef _z_gthread_t __gthread_t;
++typedef _z_gthread_key_t __gthread_key_t;
++typedef _z_gthread_once_t __gthread_once_t;
++
++
++#define __GTHREAD_ONCE_INIT 0
++#define __GTHREAD_MUTEX_INIT _z_gthread_sem_initializer
++#define __GTHREAD_MUTEX_INIT_FUNCTION _z_gthread_sem_initialize
++#define __GTHREAD_RECURSIVE_MUTEX_INIT _z_gthread_mutex_initializer
++#define __GTHREAD_RECURSIVE_MUTEX_INIT_FUNCTION _z_gthread_mutex_initialize
++#define __GTHREAD_COND_INIT _z_gthread_cond_initializer
++#define __GTHREAD_COND_INIT_FUNCTION _z_gthread_cond_initialize
++#define __GTHREAD_TIME_INIT {0, 0}
++
++static inline int
++__gthread_active_p (void)
++{
++  return 1;
++}
++
++static inline int
++__gthread_create (__gthread_t *__threadid, void *(*__func) (void *),
++		  void *__args)
++{
++  return _z_gthread_create (__threadid, __func, __args);
++}
++
++static inline int
++__gthread_join (__gthread_t __threadid, void **__value_ptr)
++{
++  return _z_gthread_join (__threadid, __value_ptr);
++}
++
++static inline int
++__gthread_detach (__gthread_t __threadid)
++{
++  return _z_gthread_detach (__threadid);
++}
++
++static inline int
++__gthread_equal (__gthread_t __t1, __gthread_t __t2)
++{
++  return _z_gthread_equal (__t1, __t2);
++}
++
++static inline __gthread_t
++__gthread_self (void)
++{
++  return _z_gthread_self ();
++}
++
++static inline int
++__gthread_yield (void)
++{
++  return _z_gthread_yield ();
++}
++
++static inline int
++__gthread_once (__gthread_once_t *__once, void (*__func) (void))
++{
++   return _z_gthread_once (__once, __func);
++}
++
++static inline int
++__gthread_key_create (__gthread_key_t *__key, void (*__dtor) (void *))
++{
++  return _z_gthread_key_create (__key, __dtor);
++}
++
++static inline int
++__gthread_key_delete (__gthread_key_t __key)
++{
++  return _z_gthread_key_delete (__key);
++}
++
++static inline void *
++__gthread_getspecific (__gthread_key_t __key)
++{
++  return _z_gthread_getspecific (__key);
++}
++
++static inline int
++__gthread_setspecific (__gthread_key_t __key, const void *__ptr)
++{
++  return _z_gthread_setspecific (__key, __ptr);
++}
++
++static inline int
++__gthread_mutex_lock (__gthread_mutex_t *__mutex)
++{
++  return _z_gthread_sem_lock (__mutex);
++}
++
++static inline int
++__gthread_mutex_trylock (__gthread_mutex_t *__mutex)
++{
++  return _z_gthread_sem_trylock (__mutex);
++}
++
++static inline int
++__gthread_mutex_timedlock (__gthread_mutex_t *__mutex,
++			   const __gthread_time_t *__abs_timeout)
++{
++  return _z_gthread_sem_timedlock (__mutex, __abs_timeout);
++}
++
++static inline int
++__gthread_mutex_unlock (__gthread_mutex_t *__mutex)
++{
++  return _z_gthread_sem_unlock (__mutex);
++}
++
++static inline int
++__gthread_mutex_destroy (__gthread_mutex_t *__mutex)
++{
++  return _z_gthread_sem_destroy (__mutex);
++}
++
++static inline int
++__gthread_recursive_mutex_lock (__gthread_recursive_mutex_t *__mutex)
++{
++  return _z_gthread_mutex_lock (__mutex);
++}
++
++static inline int
++__gthread_recursive_mutex_trylock (__gthread_recursive_mutex_t *__mutex)
++{
++  return _z_gthread_mutex_trylock (__mutex);
++}
++
++static inline int
++__gthread_recursive_mutex_timedlock (__gthread_recursive_mutex_t *__mutex,
++				     const __gthread_time_t *__abs_timeout)
++{
++  return _z_gthread_mutex_timedlock (__mutex, __abs_timeout);
++}
++
++static inline int
++__gthread_recursive_mutex_unlock (__gthread_recursive_mutex_t *__mutex)
++{
++  return _z_gthread_mutex_unlock (__mutex);
++}
++
++static inline int
++__gthread_recursive_mutex_destroy (__gthread_recursive_mutex_t *__mutex)
++{
++  return  _z_gthread_mutex_destroy (__mutex);
++}
++
++static inline int
++__gthread_cond_broadcast (__gthread_cond_t *__cond)
++{
++  return _z_gthread_cond_broadcast (__cond);
++}
++
++static inline int
++__gthread_cond_signal (__gthread_cond_t *__cond)
++{
++  return _z_gthread_cond_signal (__cond);
++}
++
++static inline int
++__gthread_cond_wait (__gthread_cond_t *__cond, __gthread_mutex_t *__mutex)
++{
++  return _z_gthread_cond_wait (__cond, __mutex);
++}
++
++static inline int
++__gthread_cond_timedwait (__gthread_cond_t *__cond, __gthread_mutex_t *__mutex,
++			  const __gthread_time_t *__abs_timeout)
++{
++  return _z_gthread_cond_timedwait (__cond, __mutex, __abs_timeout);
++}
++
++static inline int
++__gthread_cond_wait_recursive (__gthread_cond_t *__cond,
++			       __gthread_recursive_mutex_t *__mutex)
++{
++  return _z_gthread_cond_wait_recursive (__cond, __mutex);
++}
++
++static inline int
++__gthread_cond_destroy (__gthread_cond_t *__cond)
++{
++  return _z_gthread_cond_destroy (__cond);
++}
++
++#ifdef __cplusplus
++}
++#endif
++
++#endif /* ! GCC_GTHR_ZEPHYR_H */
+diff --git a/libgcc/configure b/libgcc/configure
+index 36dbbc1f6..95948123f 100644
+--- a/libgcc/configure
++++ b/libgcc/configure
+@@ -5550,6 +5550,7 @@ case $target_thread_file in
+     tpf)	thread_header=config/s390/gthr-tpf.h ;;
+     vxworks)	thread_header=config/gthr-vxworks.h ;;
+     win32)	thread_header=config/i386/gthr-win32.h ;;
++    zephyr)	thread_header=config/gthr-zephyr.h ;;
+ esac
+ 
+ 
+diff --git a/libstdc++-v3/acinclude.m4 b/libstdc++-v3/acinclude.m4
+index 0112d645a..17b744b24 100644
+--- a/libstdc++-v3/acinclude.m4
++++ b/libstdc++-v3/acinclude.m4
+@@ -1423,7 +1423,7 @@ AC_DEFUN([GLIBCXX_ENABLE_LIBSTDCXX_TIME], [
+         ac_has_nanosleep=yes
+         ac_has_sched_yield=yes
+         ;;
+-      freebsd*|netbsd*|dragonfly*|rtems*)
++      freebsd*|netbsd*|dragonfly*|rtems*|zephyr*)
+         ac_has_clock_monotonic=yes
+         ac_has_clock_realtime=yes
+         ac_has_nanosleep=yes
+@@ -4370,6 +4370,9 @@ AC_DEFUN([GLIBCXX_ENABLE_FILESYSTEM_TS], [
+       solaris*)
+         enable_libstdcxx_filesystem_ts=yes
+         ;;
++      zephyr*)
++        enable_libstdcxx_filesystem_ts=no
++        ;;        
+       *)
+         enable_libstdcxx_filesystem_ts=no
+         ;;
+diff --git a/libstdc++-v3/configure b/libstdc++-v3/configure
+index 5acf79cba..1cc1eb588 100755
+--- a/libstdc++-v3/configure
++++ b/libstdc++-v3/configure
+@@ -15426,6 +15426,7 @@ case $target_thread_file in
+     tpf)	thread_header=config/s390/gthr-tpf.h ;;
+     vxworks)	thread_header=config/gthr-vxworks.h ;;
+     win32)	thread_header=config/i386/gthr-win32.h ;;
++    zephyr)	thread_header=config/gthr-zephyr.h ;;
+ esac
+ 
+ 
+@@ -20868,7 +20869,7 @@ $as_echo "$glibcxx_glibc217" >&6; }
+         ac_has_nanosleep=yes
+         ac_has_sched_yield=yes
+         ;;
+-      freebsd*|netbsd*|dragonfly*|rtems*)
++      freebsd*|netbsd*|dragonfly*|rtems*|zephyr*)
+         ac_has_clock_monotonic=yes
+         ac_has_clock_realtime=yes
+         ac_has_nanosleep=yes
+@@ -66806,7 +66807,7 @@ $as_echo "$ac_ld_relro" >&6; }
+     $as_echo "#define HAVE_SINHL 1" >>confdefs.h
+ 
+     ;;
+-  *-rtems*)
++  *-rtems* | zephyr*)
+ 
+   # All these tests are for C++; save the language and the compiler flags.
+   # The CXXFLAGS thing is suspicious, but based on similar bits previously
+@@ -80363,6 +80364,9 @@ $as_echo_n "checking whether to build Filesystem TS support... " >&6; }
+       solaris*)
+         enable_libstdcxx_filesystem_ts=yes
+         ;;
++      zephyr*)
++        enable_libstdcxx_filesystem_ts=no 
++        ;;      
+       *)
+         enable_libstdcxx_filesystem_ts=no
+         ;;
+diff --git a/libstdc++-v3/configure.host b/libstdc++-v3/configure.host
+index f2ff1295d..be4630a75 100644
+--- a/libstdc++-v3/configure.host
++++ b/libstdc++-v3/configure.host
+@@ -318,6 +318,11 @@ case "${host_os}" in
+   vxworks)
+     os_include_dir="os/vxworks"
+     ;;
++  zephyr*)
++    os_include_dir="os/generic"
++    # Use libatomic if necessary and avoid libstdc++ specific atomicity support
++    atomicity_dir="cpu/generic/atomicity_builtins"
++    ;;
+   *)
+     os_include_dir="os/generic"
+     ;;
+diff --git a/libstdc++-v3/crossconfig.m4 b/libstdc++-v3/crossconfig.m4
+index 344eec09d..53149ee89 100644
+--- a/libstdc++-v3/crossconfig.m4
++++ b/libstdc++-v3/crossconfig.m4
+@@ -245,7 +245,7 @@ case "${host}" in
+     AC_DEFINE(HAVE_SINHF)
+     AC_DEFINE(HAVE_SINHL)
+     ;;
+-  *-rtems*)
++  *-rtems* | *-zephyr*)
+     GLIBCXX_CHECK_COMPILER_FEATURES
+     GLIBCXX_CHECK_LINKER_FEATURES
+     GLIBCXX_CHECK_MATH_SUPPORT
+-- 
+2.17.1
+
