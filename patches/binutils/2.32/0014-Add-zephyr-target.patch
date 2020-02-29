@@ -1,0 +1,272 @@
+From 8209800fa1ea177ab80b0cf6d7b6fa38c5cbb5f3 Mon Sep 17 00:00:00 2001
+From: kaidoho <kho237115@gmail.com>
+Date: Sat, 29 Feb 2020 15:55:55 +0100
+Subject: [PATCH] Add zephyr target
+
+---
+ bfd/config.bfd                             | 10 +++++-----
+ binutils/testsuite/lib/binutils-common.exp |  4 +++-
+ config.sub                                 |  2 +-
+ config/gthr.m4                             |  1 +
+ configure                                  |  6 ++++++
+ configure.ac                               |  6 ++++++
+ gas/configure.tgt                          |  4 ++--
+ gas/testsuite/gas/i386/i386.exp            |  3 ++-
+ ld/configure.tgt                           | 10 +++++-----
+ ld/testsuite/ld-mips-elf/comm-data.exp     |  1 +
+ ld/testsuite/ld-mips-elf/mips-elf.exp      |  3 ++-
+ 11 files changed, 34 insertions(+), 16 deletions(-)
+
+diff --git a/bfd/config.bfd b/bfd/config.bfd
+index 0e1ddb65..d3f9d740 100644
+--- a/bfd/config.bfd
++++ b/bfd/config.bfd
+@@ -230,7 +230,7 @@ case "${targ}" in
+     targ_archs="$targ_archs bfd_i386_arch bfd_powerpc_arch bfd_rs6000_arch"
+     want64=true
+     ;;
+-  aarch64-*-elf | aarch64-*-rtems*)
++  aarch64-*-elf | aarch64-*-rtems* | aarch64-*-zephyr*)
+     targ_defvec=aarch64_elf64_le_vec
+     targ_selvecs="aarch64_elf64_be_vec aarch64_elf32_le_vec aarch64_elf32_be_vec arm_elf32_le_vec arm_elf32_be_vec"
+     want64=true
+@@ -389,7 +389,7 @@ case "${targ}" in
+     ;;
+   arm-*-elf | arm*-*-freebsd* | arm*-*-linux-* | arm*-*-conix* | \
+   arm*-*-uclinux* | arm-*-kfreebsd*-gnu | \
+-  arm*-*-eabi* | arm-*-rtems* | arm*-*-uclinuxfdpiceabi)
++  arm*-*-eabi* | arm-*-rtems* | arm*-*-uclinuxfdpiceabi | arm-*-zephyr*)
+     targ_defvec=arm_elf32_le_vec
+     targ_selvecs="arm_elf32_fdpic_le_vec arm_elf32_be_vec arm_elf32_fdpic_be_vec"
+     ;;
+@@ -560,7 +560,7 @@ case "${targ}" in
+     targ_selvecs=hppa_elf32_vec
+     ;;
+ 
+-  i[3-7]86-*-elf* | i[3-7]86-*-rtems*)
++  i[3-7]86-*-elf* | i[3-7]86-*-rtems* | i[3-7]86-*-zephyr*)
+     targ_defvec=i386_elf32_vec
+     targ_selvecs="iamcu_elf32_vec i386_coff_vec"
+     ;;
+@@ -668,7 +668,7 @@ case "${targ}" in
+     targ_selvecs="i386_elf32_vec iamcu_elf32_vec l1om_elf64_vec k1om_elf64_vec"
+     want64=true
+     ;;
+-  x86_64-*-elf* | x86_64-*-rtems* | x86_64-*-fuchsia)
++  x86_64-*-elf* | x86_64-*-rtems* | x86_64-*-fuchsia | x86_64-*-zephyr* )
+     targ_defvec=x86_64_elf64_vec
+     targ_selvecs="i386_elf32_vec iamcu_elf32_vec x86_64_elf32_vec l1om_elf64_vec k1om_elf64_vec"
+     case "${targ}" in
+@@ -902,7 +902,7 @@ case "${targ}" in
+     targ_defvec=mips_elf32_le_vec
+     targ_selvecs="mips_elf32_be_vec mips_elf64_be_vec mips_elf64_le_vec"
+     ;;
+-  mips*-*-elf* | mips*-*-rtems* | mips*-*-windiss | mips*-*-none)
++  mips*-*-elf* | mips*-*-rtems* | mips*-*-windiss | mips*-*-none | mips*-*-zephyr*)
+     targ_defvec=mips_elf32_be_vec
+     targ_selvecs="mips_elf32_le_vec mips_elf64_be_vec mips_elf64_le_vec"
+     ;;
+diff --git a/binutils/testsuite/lib/binutils-common.exp b/binutils/testsuite/lib/binutils-common.exp
+index 213e53f1..b88efef2 100644
+--- a/binutils/testsuite/lib/binutils-common.exp
++++ b/binutils/testsuite/lib/binutils-common.exp
+@@ -52,6 +52,7 @@ proc is_elf_format {} {
+ 	 && ![istarget *-*-sysv4*]
+ 	 && ![istarget *-*-unixware*]
+ 	 && ![istarget *-*-wasm32*]
++	 && ![istarget *-*-zephyr*]
+ 	 && ![istarget avr-*-*]
+ 	 && ![istarget hppa*64*-*-hpux*]
+ 	 && ![istarget ia64-*-hpux*] } {
+@@ -232,7 +233,8 @@ proc is_bad_symtab {} {
+ 	 || [istarget "*-*-irix6*"]
+ 	 || [istarget "*-*-none"]
+ 	 || [istarget "*-*-rtems*"]
+-	 || [istarget "*-*-windiss"] } {
++	 || [istarget "*-*-windiss"]
++	 || [istarget *-*-zephyr*] } {
+ 	return 1;
+     }
+     if { [istarget "*-*-elf*"]
+diff --git a/config.sub b/config.sub
+index 3b4c7624..e5573b1a 100755
+--- a/config.sub
++++ b/config.sub
+@@ -1365,7 +1365,7 @@ case $os in
+ 	     | powermax* | dnix* | nx6 | nx7 | sei* | dragonfly* \
+ 	     | skyos* | haiku* | rdos* | toppers* | drops* | es* \
+ 	     | onefs* | tirtos* | phoenix* | fuchsia* | redox* | bme* \
+-	     | midnightbsd* | amdhsa* | unleashed* | emscripten*)
++	     | midnightbsd* | amdhsa* | unleashed* | emscripten* | zephyr*)
+ 	# Remember, each alternative MUST END IN *, to match a version number.
+ 		;;
+ 	qnx*)
+diff --git a/config/gthr.m4 b/config/gthr.m4
+index 7b29f1f3..265639b7 100644
+--- a/config/gthr.m4
++++ b/config/gthr.m4
+@@ -21,6 +21,7 @@ case $1 in
+     tpf)	thread_header=config/s390/gthr-tpf.h ;;
+     vxworks)	thread_header=config/gthr-vxworks.h ;;
+     win32)	thread_header=config/i386/gthr-win32.h ;;
++    zephyr)	thread_header=config/gthr-zephyr.h ;;
+ esac
+ AC_SUBST(thread_header)
+ ])
+diff --git a/configure b/configure
+index 66fbc19f..351d6131 100755
+--- a/configure
++++ b/configure
+@@ -3418,6 +3418,9 @@ case "${target}" in
+   *-*-vxworks*)
+     noconfigdirs="$noconfigdirs target-libffi"
+     ;;
++  *-*-zephyr*)
++    noconfigdirs="$noconfigdirs target-libffi"
++    ;;
+   aarch64*-*-freebsd*)
+     noconfigdirs="$noconfigdirs target-libffi"
+     ;;
+@@ -3662,6 +3665,9 @@ case "${target}" in
+     ;;
+   *-*-vxworks*)
+     ;;
++  *-*-zephyr*)
++    noconfigdirs="$noconfigdirs target-libgloss"
++    ;;
+   alpha*-dec-osf*)
+     # ld works, but does not support shared libraries.
+     # gas doesn't generate exception information.
+diff --git a/configure.ac b/configure.ac
+index 298bf9bd..ff1242ac 100644
+--- a/configure.ac
++++ b/configure.ac
+@@ -715,6 +715,9 @@ case "${target}" in
+   *-*-vxworks*)
+     noconfigdirs="$noconfigdirs target-libffi"
+     ;;
++  *-*-zephyr*)
++    noconfigdirs="$noconfigdirs target-libffi"
++    ;;
+   aarch64*-*-freebsd*)
+     noconfigdirs="$noconfigdirs target-libffi"
+     ;;
+@@ -959,6 +962,9 @@ case "${target}" in
+     ;;
+   *-*-vxworks*)
+     ;;
++  *-*-zephyr*)
++    noconfigdirs="$noconfigdirs target-libgloss"
++    ;;
+   alpha*-dec-osf*)
+     # ld works, but does not support shared libraries.
+     # gas doesn't generate exception information.
+diff --git a/gas/configure.tgt b/gas/configure.tgt
+index 616d2113..ef213e00 100644
+--- a/gas/configure.tgt
++++ b/gas/configure.tgt
+@@ -139,7 +139,7 @@ case ${generic_target} in
+ 
+   arm-*-phoenix*)			fmt=elf ;;
+   arm-*-elf)				fmt=elf ;;
+-  arm-*-eabi* | arm-*-rtems*)		fmt=elf em=armeabi ;;
++  arm-*-eabi* | arm-*-rtems* | arm-*-zephyr*)		fmt=elf em=armeabi ;;
+   arm-*-symbianelf*)			fmt=elf em=symbian ;;
+   arm-*-kaos*)				fmt=elf ;;
+   arm-*-conix*)				fmt=elf ;;
+@@ -431,7 +431,7 @@ case ${generic_target} in
+   *-*-generic)				fmt=generic ;;
+   *-*-xray | *-*-hms)			fmt=coff ;;
+   *-*-sim)				fmt=coff ;;
+-  *-*-elf | *-*-rtems* | *-*-sysv4*)	fmt=elf ;;
++  *-*-elf | *-*-rtems* | *-*-sysv4* | *-*-zephyr*)	fmt=elf ;;
+   *-*-solaris*)				fmt=elf em=solaris ;;
+   *-*-aros*)				fmt=elf em=linux ;;
+   *-*-vxworks* | *-*-windiss)		fmt=elf em=vxworks ;;
+diff --git a/gas/testsuite/gas/i386/i386.exp b/gas/testsuite/gas/i386/i386.exp
+index 22ee134f..5411bb6d 100644
+--- a/gas/testsuite/gas/i386/i386.exp
++++ b/gas/testsuite/gas/i386/i386.exp
+@@ -994,7 +994,8 @@ if [expr ([istarget "i*86-*-*"] || [istarget "x86_64-*-*"]) && [gas_64_check]] t
+       && ![istarget "*-*-rtems*"]
+       && ![istarget "*-*-sco*"]
+       && ![istarget "*-*-solaris*"]
+-      && ![istarget "*-*-sysv*"] } then {
++      && ![istarget "*-*-sysv*"]
++      && ![istarget "*-*-zephyr*"] } then {
+ 	run_dump_test "rex"
+     }
+ 
+diff --git a/ld/configure.tgt b/ld/configure.tgt
+index beba17ef..067353d1 100644
+--- a/ld/configure.tgt
++++ b/ld/configure.tgt
+@@ -47,7 +47,7 @@ targ64_extra_libpath=
+ case "${targ}" in
+ aarch64_be-*-elf)	targ_emul=aarch64elfb
+ 			targ_extra_emuls="aarch64elf aarch64elf32 aarch64elf32b armelfb armelf" ;;
+-aarch64-*-elf | aarch64-*-rtems*)
++aarch64-*-elf | aarch64-*-rtems* | aarch64-*-zephyr*)
+ 			targ_emul=aarch64elf
+ 			targ_extra_emuls="aarch64elf32 aarch64elf32b aarch64elfb armelf armelfb" ;;
+ aarch64-*-cloudabi*)	targ_emul=aarch64cloudabi
+@@ -115,7 +115,7 @@ arm-*-nto*)		targ_emul=armnto ;;
+ arm-*-phoenix*)		targ_emul=armelf ;;
+ armeb-*-elf | armeb-*-eabi*)
+ 			targ_emul=armelfb ;;
+-arm-*-elf | arm*-*-eabi* | arm-*-rtems*)
++arm-*-elf | arm*-*-eabi* | arm-*-rtems* | arm-*-zephyr*)
+ 			targ_emul=armelf ;;
+ arm*-*-symbianelf*)	targ_emul=armsymbian;;
+ arm-*-kaos*)		targ_emul=armelf ;;
+@@ -306,10 +306,10 @@ x86_64-*-netbsd*)	targ_emul=elf_x86_64
+ 			esac ;;
+ i[3-7]86-*-elfiamcu)	targ_emul=elf_iamcu
+ 			targ_extra_emuls=elf_i386 ;;
+-i[3-7]86-*-elf* | i[3-7]86-*-rtems*)
++i[3-7]86-*-elf* | i[3-7]86-*-rtems* | i[3-7]86-*-zephyr*)
+ 			targ_emul=elf_i386
+ 			targ_extra_emuls=elf_iamcu ;;
+-x86_64-*-elf* | x86_64-*-rtems* | x86_64-*-fuchsia*)
++x86_64-*-elf* | x86_64-*-rtems* | x86_64-*-fuchsia* | x86_64-*-zephyr*)
+ 			targ_emul=elf_x86_64
+ 			targ_extra_emuls="elf_i386 elf_iamcu elf32_x86_64 elf_l1om elf_k1om"
+ 			targ_extra_libpath="elf_i386 elf_iamcu elf32_x86_64 elf_l1om elf_k1om"
+@@ -461,7 +461,7 @@ mips*el-ps2-elf*)	targ_emul=elf32lr5900
+ 			targ_extra_emuls="elf32lr5900n32"
+ 			targ_extra_libpath=$targ_extra_emuls ;;
+ mips*el-*-elf*)		targ_emul=elf32elmip ;;
+-mips*-*-elf* | mips*-*-rtems*)
++mips*-*-elf* | mips*-*-rtems* | mips*-*-zephyr*)
+ 			targ_emul=elf32ebmip ;;
+ mips*el-*-vxworks*)	targ_emul=elf32elmipvxworks
+ 			targ_extra_emuls="elf32ebmipvxworks" ;;
+diff --git a/ld/testsuite/ld-mips-elf/comm-data.exp b/ld/testsuite/ld-mips-elf/comm-data.exp
+index 41ee8e56..d97af1e9 100644
+--- a/ld/testsuite/ld-mips-elf/comm-data.exp
++++ b/ld/testsuite/ld-mips-elf/comm-data.exp
+@@ -87,6 +87,7 @@ if {[istarget *-img-elf*] \
+     set abi_ldemul(o32) elf32lr5900
+     set abi_ldemul(n32) elf32lr5900n32
+ } elseif { [istarget *-*-elf*] \
++	   || [istarget *-*-rtems*] \
+ 	   || [istarget *-*-rtems*] } {
+     if [istarget *el-*-*] {
+ 	set abi_ldemul(o32) elf32elmip
+diff --git a/ld/testsuite/ld-mips-elf/mips-elf.exp b/ld/testsuite/ld-mips-elf/mips-elf.exp
+index e2063e5c..5fd1d32d 100644
+--- a/ld/testsuite/ld-mips-elf/mips-elf.exp
++++ b/ld/testsuite/ld-mips-elf/mips-elf.exp
+@@ -235,7 +235,8 @@ if {[istarget *-*-openbsd*] } {
+     set abi_ldflags(o32) -melf32lr5900
+     set irixemul 1
+ } elseif { [istarget *-*-elf*] \
+-	   || [istarget *-*-rtems*] } {
++	   || [istarget *-*-rtems*] \
++	   || [istarget *-*-zephyr*] } {
+     set abi_asflags(o32) -32
+     set irixemul 1
+ } elseif { [istarget *-*-irix6*] } {
+-- 
+2.17.1
+
