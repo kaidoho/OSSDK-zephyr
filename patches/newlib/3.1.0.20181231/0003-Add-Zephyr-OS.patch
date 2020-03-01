@@ -1,4 +1,4 @@
-From 8f96247d57a56182ff17e9242d3eb9298f59ca3a Mon Sep 17 00:00:00 2001
+From 642ddc8afba975288fb477ec0e5344bddeb50fd5 Mon Sep 17 00:00:00 2001
 From: kaidoho <kho237115@gmail.com>
 Date: Sat, 29 Feb 2020 20:09:39 +0100
 Subject: [PATCH] Add Zephyr OS
@@ -9,6 +9,19 @@ Subject: [PATCH] Add Zephyr OS
  configure                                     |    3 +
  libgloss/arm/configure                        |    2 +-
  newlib/configure.host                         |    8 +
+ newlib/libc/include/machine/setjmp.h          |    6 +-
+ newlib/libc/include/machine/time.h            |    2 +-
+ newlib/libc/include/stdio_ext.h               |    2 +-
+ newlib/libc/include/sys/config.h              |   11 +
+ newlib/libc/include/sys/features.h            |   56 +
+ newlib/libc/include/sys/signal.h              |   10 +-
+ newlib/libc/include/sys/stat.h                |    2 +-
+ newlib/libc/include/sys/types.h               |    4 +-
+ newlib/libc/ssp/stack_protector.c             |    2 +-
+ newlib/libc/stdio/fpurge.c                    |    4 +-
+ newlib/libc/stdio/fsetlocking.c               |    4 +-
+ newlib/libc/stdio/local.h                     |    2 +-
+ newlib/libc/stdlib/system.c                   |    2 +-
  newlib/libc/sys/configure                     |    5 +-
  newlib/libc/sys/configure.in                  |    1 +
  newlib/libc/sys/zephyr/Makefile.am            |   18 +
@@ -30,7 +43,7 @@ Subject: [PATCH] Add Zephyr OS
  newlib/libc/sys/zephyr/include/sys/slist.h    |  416 ++
  .../libc/sys/zephyr/include/sys/syslimits.h   |   64 +
  newlib/libc/sys/zephyr/include/sys/util.h     |  898 ++++
- 26 files changed, 9274 insertions(+), 3 deletions(-)
+ 39 files changed, 9361 insertions(+), 23 deletions(-)
  create mode 100644 newlib/libc/sys/zephyr/Makefile.am
  create mode 100644 newlib/libc/sys/zephyr/Makefile.in
  create mode 100644 newlib/libc/sys/zephyr/aclocal.m4
@@ -129,6 +142,313 @@ index 37d2b9b..2be6625 100644
  # UDI doesn't have exec, so system() should fail the right way
    a29k-amd-udi)
  	newlib_cflags="${newlib_cflags} -DNO_EXEC"
+diff --git a/newlib/libc/include/machine/setjmp.h b/newlib/libc/include/machine/setjmp.h
+index 9212f84..59e5261 100644
+--- a/newlib/libc/include/machine/setjmp.h
++++ b/newlib/libc/include/machine/setjmp.h
+@@ -90,7 +90,7 @@ _BEGIN_STD_C
+ #ifdef __i386__
+ # if defined(__CYGWIN__) && !defined (_JBLEN)
+ #  define _JBLEN (13 * 4)
+-# elif defined(__unix__) || defined(__rtems__)
++# elif defined(__unix__) || defined(__rtems__) || defined(__zephyr__)
+ #  define _JBLEN	9
+ # elif defined(__iamcu__)
+ /* Intel MCU jmp_buf only covers callee-saved registers. */
+@@ -379,7 +379,7 @@ typedef	int jmp_buf[_JBLEN];
+ 
+ _END_STD_C
+ 
+-#if (defined(__CYGWIN__) || defined(__rtems__)) && __POSIX_VISIBLE
++#if (defined(__CYGWIN__) || defined(__rtems__) || defined(__zephyr__)) && __POSIX_VISIBLE
+ #include <signal.h>
+ 
+ #ifdef __cplusplus
+@@ -461,4 +461,4 @@ extern int _setjmp (jmp_buf);
+ #ifdef __cplusplus
+ }
+ #endif
+-#endif /* (__CYGWIN__ or __rtems__) and __POSIX_VISIBLE */
++#endif /* (__CYGWIN__ or __rtems__ or __zephyr__) and __POSIX_VISIBLE */
+diff --git a/newlib/libc/include/machine/time.h b/newlib/libc/include/machine/time.h
+index c75edaf..8e45a2f 100644
+--- a/newlib/libc/include/machine/time.h
++++ b/newlib/libc/include/machine/time.h
+@@ -1,7 +1,7 @@
+ #ifndef	_MACHTIME_H_
+ #define	_MACHTIME_H_
+ 
+-#if defined(__rtems__) || defined(__VISIUM__) || defined(__riscv)
++#if defined(__rtems__) || defined(__VISIUM__) || defined(__riscv) || defined(__zephyr__)
+ #define _CLOCKS_PER_SEC_ 1000000
+ #elif defined(__aarch64__) || defined(__arm__) || defined(__thumb__)
+ #define _CLOCKS_PER_SEC_ 100
+diff --git a/newlib/libc/include/stdio_ext.h b/newlib/libc/include/stdio_ext.h
+index 231262d..4ff04ed 100644
+--- a/newlib/libc/include/stdio_ext.h
++++ b/newlib/libc/include/stdio_ext.h
+@@ -7,7 +7,7 @@
+ #ifndef _STDIO_EXT_H_
+ #define _STDIO_EXT_H_
+ 
+-#ifdef __rtems__
++#if defined(__rtems__) || defined(__zephyr__)
+ #error "<stdio_ext.h> not supported"
+ #endif
+ 
+diff --git a/newlib/libc/include/sys/config.h b/newlib/libc/include/sys/config.h
+index 49b62eb..3e7a600 100644
+--- a/newlib/libc/include/sys/config.h
++++ b/newlib/libc/include/sys/config.h
+@@ -242,6 +242,17 @@
+ #define _REENT_GLOBAL_STDIO_STREAMS
+ #endif
+ 
++#if defined(__zephyr__)
++#define __FILENAME_MAX__ 255
++/*
++#define _READ_WRITE_RETURN_TYPE _ssize_t
++#define __DYNAMIC_REENT__
++#define _REENT_GLOBAL_ATEXIT
++#define _REENT_GLOBAL_STDIO_STREAMS
++*/
++#endif
++
++
+ #ifndef __EXPORT
+ #define __EXPORT
+ #endif
+diff --git a/newlib/libc/include/sys/features.h b/newlib/libc/include/sys/features.h
+index f28dd07..9b4c0e5 100644
+--- a/newlib/libc/include/sys/features.h
++++ b/newlib/libc/include/sys/features.h
+@@ -387,6 +387,62 @@ extern "C" {
+ 
+ #endif
+ 
++#ifdef __zephyr__
++#define _POSIX_JOB_CONTROL     		1
++#define _POSIX_SAVED_IDS       		1
++#define _POSIX_VERSION			199309L
++#define _POSIX_ASYNCHRONOUS_IO		1
++#define _POSIX_FSYNC			1
++#define _POSIX_MAPPED_FILES		1
++#define _POSIX_MEMLOCK			1
++#define _POSIX_MEMLOCK_RANGE		1
++#define _POSIX_MEMORY_PROTECTION	1
++#define _POSIX_MESSAGE_PASSING		1
++#define _POSIX_MONOTONIC_CLOCK		200112L
++#define _POSIX_CLOCK_SELECTION		200112L
++#define _POSIX_PRIORITIZED_IO		1
++#define _POSIX_PRIORITY_SCHEDULING	1
++#define _POSIX_REALTIME_SIGNALS		1
++#define _POSIX_SEMAPHORES		1
++#define _POSIX_SHARED_MEMORY_OBJECTS	1
++#define _POSIX_SYNCHRONIZED_IO		1
++#define _POSIX_TIMERS			1
++#define _POSIX_BARRIERS                 200112L
++#define _POSIX_READER_WRITER_LOCKS      200112L
++#define _POSIX_SPIN_LOCKS               200112L
++
++
++/* In P1003.1b but defined by drafts at least as early as P1003.1c/D10  */
++#define _POSIX_THREADS				1
++#define _POSIX_THREAD_ATTR_STACKADDR		1
++#define _POSIX_THREAD_ATTR_STACKSIZE		1
++#define _POSIX_THREAD_PRIORITY_SCHEDULING	1
++#define _POSIX_THREAD_PRIO_INHERIT		1
++#define _POSIX_THREAD_PRIO_PROTECT		1
++#define _POSIX_THREAD_PROCESS_SHARED		1
++#define _POSIX_THREAD_SAFE_FUNCTIONS		1
++
++/* P1003.4b/D8 defines the constants below this comment. */
++#define _POSIX_SPAWN				1
++#define _POSIX_TIMEOUTS				1
++#define _POSIX_CPUTIME				1
++#define _POSIX_THREAD_CPUTIME			1
++#define _POSIX_SPORADIC_SERVER			1
++#define _POSIX_THREAD_SPORADIC_SERVER		1
++#define _POSIX_DEVICE_CONTROL			1
++#define _POSIX_DEVCTL_DIRECTION			1
++#define _POSIX_INTERRUPT_CONTROL		1
++#define _POSIX_ADVISORY_INFO			1
++
++/* UNIX98 added some new pthread mutex attributes */
++#define _UNIX98_THREAD_MUTEX_ATTRIBUTES         1
++
++/* POSIX 1003.26-2003 defined device control method */
++#define _POSIX_26_VERSION			200312L
++
++#endif
++
++
+ /* XMK loosely adheres to POSIX -- 1003.1 */
+ #ifdef __XMK__
+ #define _POSIX_THREADS				1
+diff --git a/newlib/libc/include/sys/signal.h b/newlib/libc/include/sys/signal.h
+index 45cc036..399e62b 100644
+--- a/newlib/libc/include/sys/signal.h
++++ b/newlib/libc/include/sys/signal.h
+@@ -72,7 +72,7 @@ typedef struct {
+ } siginfo_t;
+ #endif /* defined(_POSIX_REALTIME_SIGNALS) || __POSIX_VISIBLE >= 199309 */
+ 
+-#if defined(__rtems__)
++#if defined(__rtems__) || defined(__zephyr__)
+ 
+ /*  3.3.8 Synchronously Accept a Signal, P1003.1b-1993, p. 76 */
+ 
+@@ -112,7 +112,7 @@ struct sigaction {
+ #define sa_sigaction  _signal_handlers._sigaction
+ #endif
+ 
+-#else /* defined(__rtems__) */
++#else /* defined(__rtems__ or __zephyr__) */
+ 
+ #define SA_NOCLDSTOP 1  /* only value supported now for sa_flags */
+ 
+@@ -190,7 +190,7 @@ int sigpending (sigset_t *);
+ int sigsuspend (const sigset_t *);
+ int sigwait (const sigset_t *, int *);
+ 
+-#if !defined(__CYGWIN__) && !defined(__rtems__)
++#if !defined(__CYGWIN__) && !defined(__rtems__) && !defined(__zephyr__)
+ /* These depend upon the type of sigset_t, which right now 
+    is always a long.. They're in the POSIX namespace, but
+    are not ANSI. */
+@@ -199,7 +199,7 @@ int sigwait (const sigset_t *, int *);
+ #define sigemptyset(what)   (*(what) = 0, 0)
+ #define sigfillset(what)    (*(what) = ~(0), 0)
+ #define sigismember(what,sig) (((*(what)) & (1<<(sig))) != 0)
+-#endif /* !__CYGWIN__ && !__rtems__ */
++#endif /* !__CYGWIN__ && !__rtems__ && !__zephyr__*/
+ #endif /* __POSIX_VISIBLE */
+ 
+ /* There are two common sigpause variants, both of which take an int argument.
+@@ -290,7 +290,7 @@ int sigqueue (pid_t, int, const union sigval);
+ #define	SIGALRM	14	/* alarm clock */
+ #define	SIGTERM	15	/* software termination signal from kill */
+ 
+-#if defined(__rtems__)
++#if defined(__rtems__) || defined(__zephyr__)
+ #define	SIGURG	16	/* urgent condition on IO channel */
+ #define	SIGSTOP	17	/* sendable stop signal not from tty */
+ #define	SIGTSTP	18	/* stop signal from tty */
+diff --git a/newlib/libc/include/sys/stat.h b/newlib/libc/include/sys/stat.h
+index eee98db..bd09df9 100644
+--- a/newlib/libc/include/sys/stat.h
++++ b/newlib/libc/include/sys/stat.h
+@@ -152,7 +152,7 @@ int	mkfifo (const char *__path, mode_t __mode );
+ int	stat (const char *__restrict __path, struct stat *__restrict __sbuf );
+ mode_t	umask (mode_t __mask );
+ 
+-#if defined (__SPU__) || defined(__rtems__) || defined(__CYGWIN__) && !defined(__INSIDE_CYGWIN__)
++#if defined (__SPU__) || defined(__rtems__) || defined(__CYGWIN__) || defined(__zephyr__) && !defined(__INSIDE_CYGWIN__)
+ int	lstat (const char *__restrict __path, struct stat *__restrict __buf );
+ int	mknod (const char *__path, mode_t __mode, dev_t __dev );
+ #endif
+diff --git a/newlib/libc/include/sys/types.h b/newlib/libc/include/sys/types.h
+index 65ff520..3c1b621 100644
+--- a/newlib/libc/include/sys/types.h
++++ b/newlib/libc/include/sys/types.h
+@@ -39,7 +39,7 @@ typedef __uint64_t	u_int64_t;
+ typedef int register_t;
+ #define __BIT_TYPES_DEFINED__ 1
+ 
+-#if defined(__rtems__) || defined(__XMK__)
++#if defined(__rtems__) || defined(__XMK__) || defined(__zephyr__)
+ /*
+  *  The following section is RTEMS specific and is needed to more
+  *  closely match the types defined in the BSD sys/types.h.
+@@ -53,7 +53,7 @@ typedef	__int64_t	quad_t;
+ typedef	quad_t *	qaddr_t;
+ #endif
+ 
+-#endif /* __rtems__ || __XMK__ */
++#endif /* __rtems__ || __XMK__ || __zephyr__ */
+ 
+ #ifndef __need_inttypes
+ 
+diff --git a/newlib/libc/ssp/stack_protector.c b/newlib/libc/ssp/stack_protector.c
+index ee014b6..bd948ec 100644
+--- a/newlib/libc/ssp/stack_protector.c
++++ b/newlib/libc/ssp/stack_protector.c
+@@ -14,7 +14,7 @@ __stack_chk_init (void)
+   if (__stack_chk_guard != 0)
+     return;
+ 
+-#if defined(__CYGWIN__) || defined(__rtems__)
++#if defined(__CYGWIN__) || defined(__rtems__) || defined(__zephyr__)
+   arc4random_buf(&__stack_chk_guard, sizeof(__stack_chk_guard));
+ #else
+   /* If getentropy is not available, use the "terminator canary". */
+diff --git a/newlib/libc/stdio/fpurge.c b/newlib/libc/stdio/fpurge.c
+index 2e4f61e..e1dc107 100644
+--- a/newlib/libc/stdio/fpurge.c
++++ b/newlib/libc/stdio/fpurge.c
+@@ -51,7 +51,7 @@ No supporting OS subroutines are required.
+ 
+ #include <_ansi.h>
+ #include <stdio.h>
+-#ifndef __rtems__
++#if !defined(__rtems__) && !defined(__zephyr__)  
+ #include <stdio_ext.h>
+ #endif
+ #include <errno.h>
+@@ -97,7 +97,7 @@ fpurge (register FILE * fp)
+   return _fpurge_r (_REENT, fp);
+ }
+ 
+-#ifndef __rtems__
++#if !defined(__rtems__) && !defined(__zephyr__) 
+ 
+ void
+ __fpurge (register FILE * fp)
+diff --git a/newlib/libc/stdio/fsetlocking.c b/newlib/libc/stdio/fsetlocking.c
+index 062b93a..94f5874 100644
+--- a/newlib/libc/stdio/fsetlocking.c
++++ b/newlib/libc/stdio/fsetlocking.c
+@@ -57,7 +57,7 @@ This function originates from Solaris and is also provided by GNU libc.
+ No supporting OS subroutines are required.
+ */
+ 
+-#ifndef __rtems__
++#if !defined(__rtems__) && !defined(__zephyr__) 
+ 
+ #include <_ansi.h>
+ #include <stdio.h>
+@@ -86,4 +86,4 @@ __fsetlocking (FILE * fp,
+   return result;
+ }
+ 
+-#endif /* __rtems__ */
++#endif /* !__rtems__ && !__zephyr__ */
+diff --git a/newlib/libc/stdio/local.h b/newlib/libc/stdio/local.h
+index 53694aa..e67fdfd 100644
+--- a/newlib/libc/stdio/local.h
++++ b/newlib/libc/stdio/local.h
+@@ -56,7 +56,7 @@
+    the appropriate _newlib_XXX_exit macro. */
+ 
+ #if !defined (__SINGLE_THREAD__) && defined (_POSIX_THREADS) \
+-    && !defined (__rtems__)
++    && !defined (__rtems__) && !defined (__zephyr__)
+ #define _STDIO_WITH_THREAD_CANCELLATION_SUPPORT
+ #endif
+ 
+diff --git a/newlib/libc/stdlib/system.c b/newlib/libc/stdlib/system.c
+index f30b7df..41db088 100644
+--- a/newlib/libc/stdlib/system.c
++++ b/newlib/libc/stdlib/system.c
+@@ -99,7 +99,7 @@ system (const char *s)
+ 
+ #endif
+ 
+-#if defined (unix) && !defined (__CYGWIN__) && !defined(__rtems__)
++#if defined (unix) && !defined (__CYGWIN__) && !defined(__rtems__) && !defined(__zephyr__)
+ extern char **environ;
+ 
+ /* Only deal with a pointer to environ, to work around subtle bugs with shared
 diff --git a/newlib/libc/sys/configure b/newlib/libc/sys/configure
 index 08485a1..614e6d5 100755
 --- a/newlib/libc/sys/configure
