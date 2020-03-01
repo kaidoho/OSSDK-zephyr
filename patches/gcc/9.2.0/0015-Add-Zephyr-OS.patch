@@ -1,6 +1,6 @@
-From 955295525412f73e0a6768ad1ad042350e4f3253 Mon Sep 17 00:00:00 2001
+From 89dbf9f6e6404ef8833efd30f155493b58405c4c Mon Sep 17 00:00:00 2001
 From: kaidoho <kho237115@gmail.com>
-Date: Wed, 26 Feb 2020 19:51:44 +0100
+Date: Sat, 29 Feb 2020 19:38:44 +0100
 Subject: [PATCH] Add Zephyr OS
 
 ---
@@ -8,13 +8,15 @@ Subject: [PATCH] Add Zephyr OS
  config/gthr.m4                        |   1 +
  configure                             |   6 +
  configure.ac                          |   6 +
- gcc/config.gcc                        |  86 ++++++++-
+ gcc/config.gcc                        |  73 +++++++-
  gcc/config/aarch64/zephyr.h           |  33 ++++
- gcc/config/arm/zephyr.h               |  36 ++++
- gcc/config/i386/zephyr.h              |  34 ++++
+ gcc/config/arm/zephyr.h               |  33 ++++
+ gcc/config/microblaze/t-zephyr        |   1 +
  gcc/config/microblaze/zephyr.h        |  31 ++++
  gcc/config/mips/zephyr.h              |  38 ++++
+ gcc/config/nios2/t-zephyr             | 133 ++++++++++++++
  gcc/config/nios2/zephyr.h             |  37 ++++
+ gcc/config/riscv/t-zephyr             |  25 +++
  gcc/config/riscv/zephyr.h             |  31 ++++
  gcc/config/t-zephyr                   |   2 +
  gcc/config/zephyr.h                   |  32 ++++
@@ -23,20 +25,22 @@ Subject: [PATCH] Add Zephyr OS
  libatomic/config/zephyr/host-config.h |  41 +++++
  libatomic/config/zephyr/lock.c        |  37 ++++
  libatomic/configure.tgt               |   5 +
- libgcc/config.host                    |  26 +--
+ libgcc/config.host                    |  32 +++-
  libgcc/config/gthr-zephyr.h           | 239 ++++++++++++++++++++++++++
  libgcc/configure                      |   1 +
  libstdc++-v3/acinclude.m4             |   5 +-
- libstdc++-v3/configure                |   8 +-
- libstdc++-v3/configure.host           |   5 +
- libstdc++-v3/crossconfig.m4           |   2 +-
- 26 files changed, 751 insertions(+), 24 deletions(-)
+ libstdc++-v3/configure                |   5 +-
+ libstdc++-v3/configure.host           |   4 +
+ libstdc++-v3/crossconfig.m4           |   6 +
+ 28 files changed, 873 insertions(+), 17 deletions(-)
  create mode 100644 gcc/config/aarch64/zephyr.h
  create mode 100644 gcc/config/arm/zephyr.h
- create mode 100644 gcc/config/i386/zephyr.h
+ create mode 100644 gcc/config/microblaze/t-zephyr
  create mode 100644 gcc/config/microblaze/zephyr.h
  create mode 100644 gcc/config/mips/zephyr.h
+ create mode 100644 gcc/config/nios2/t-zephyr
  create mode 100644 gcc/config/nios2/zephyr.h
+ create mode 100644 gcc/config/riscv/t-zephyr
  create mode 100644 gcc/config/riscv/zephyr.h
  create mode 100644 gcc/config/t-zephyr
  create mode 100644 gcc/config/zephyr.h
@@ -46,7 +50,7 @@ Subject: [PATCH] Add Zephyr OS
  create mode 100644 libgcc/config/gthr-zephyr.h
 
 diff --git a/config.sub b/config.sub
-index 75bb6a313..b81a95093 100755
+index 75bb6a313..f335d1ed2 100755
 --- a/config.sub
 +++ b/config.sub
 @@ -1363,7 +1363,7 @@ case $os in
@@ -54,7 +58,7 @@ index 75bb6a313..b81a95093 100755
  	     | skyos* | haiku* | rdos* | toppers* | drops* | es* \
  	     | onefs* | tirtos* | phoenix* | fuchsia* | redox* | bme* \
 -	     | midnightbsd* | amdhsa* | unleashed* | emscripten*)
-+	     | midnightbsd* | amdhsa* | unleashed* | emscripten* | zephyr*)
++	     | midnightbsd* | amdhsa* | unleashed* | emscripten* | zephyr* )
  	# Remember, each alternative MUST END IN *, to match a version number.
  		;;
  	qnx*)
@@ -119,7 +123,7 @@ index 9db4fd14a..9ee49b7e7 100644
      # ld works, but does not support shared libraries.
      # gas doesn't generate exception information.
 diff --git a/gcc/config.gcc b/gcc/config.gcc
-index ddd3b8f4d..87f06158c 100644
+index 99278b8f0..f6a8ffd02 100644
 --- a/gcc/config.gcc
 +++ b/gcc/config.gcc
 @@ -970,6 +970,20 @@ case ${target} in
@@ -152,90 +156,58 @@ index ddd3b8f4d..87f06158c 100644
  	tm_file="${tm_file} dbxelf.h elfos.h newlib-stdint.h"
  	tm_file="${tm_file} aarch64/aarch64-elf.h aarch64/aarch64-elf-raw.h"
  	tmake_file="${tmake_file} aarch64/t-aarch64"
-@@ -986,12 +1000,15 @@ aarch64*-*-elf | aarch64*-*-fuchsia* | aarch64*-*-rtems*)
- 	aarch64-*-elf*)
- 		use_gcc_stdint=wrap
- 		;;
--        aarch64-*-fuchsia*)
--                tm_file="${tm_file} fuchsia.h"
--                ;;
-+	aarch64-*-fuchsia*)
-+		tm_file="${tm_file} fuchsia.h"
-+		;;
+@@ -992,6 +1006,9 @@ aarch64*-*-elf | aarch64*-*-fuchsia* | aarch64*-*-rtems*)
  	aarch64-*-rtems*)
  	  	tm_file="${tm_file} rtems.h aarch64/rtems.h"
  		;;
 +	aarch64-*-zephyr*)
 +	  	tm_file="${tm_file} zephyr.h aarch64/zephyr.h"
-+		;;			
++		;;
  	esac
  	case $target in
  	aarch64_be-*)
-@@ -1072,7 +1089,7 @@ alpha*-dec-*vms*)
- 	tm_file="${tm_file} vms/vms.h alpha/vms.h"
- 	tmake_file="${tmake_file} alpha/t-vms alpha/t-alpha"
- 	;;
--arc*-*-elf*)
-+arc*-*-elf* | arc*-*-zephyr*)
- 	tm_file="arc/arc-arch.h dbxelf.h elfos.h newlib-stdint.h arc/elf.h ${tm_file}"
- 	tmake_file="arc/t-multilib arc/t-arc"
- 	extra_gcc_objs="driver-arc.o"
-@@ -1085,6 +1102,13 @@ arc*-*-elf*)
- 		*)				with_endian=little ;;
- 		esac
- 	fi
-+
-+	case ${target} in
-+	arc*-*-zephyr*)
-+	  tm_file="${tm_file} zephyr.h arc/zephyr.h
-+	  ;;
-+	esac
-+
- 	case ${with_endian} in
- 	big|little)		;;
- 	*)	echo "with_endian=${with_endian} not supported."; exit 1 ;;
-@@ -1208,7 +1232,7 @@ arm*-*-phoenix*)
+@@ -1212,7 +1229,7 @@ arm*-*-phoenix*)
  	tmake_file="${tmake_file} arm/t-arm arm/t-bpabi arm/t-phoenix"
  	target_cpu_cname="arm7tdmi"
  	;;
 -arm*-*-eabi* | arm*-*-symbianelf* | arm*-*-rtems* | arm*-*-fuchsia*)
-+arm*-*-eabi* | arm*-*-symbianelf* | arm*-*-rtems* | arm*-*-fuchsia* | arm*-*-zephyr*)
++arm*-*-eabi* | arm*-*-symbianelf* | arm*-*-rtems* | arm*-*-fuchsia* | arm*-*-zephyr* )
  	case ${target} in
  	arm*eb-*-eabi*)
  	  tm_defines="${tm_defines} TARGET_BIG_ENDIAN_DEFAULT=1"
-@@ -1239,6 +1263,10 @@ arm*-*-eabi* | arm*-*-symbianelf* | arm*-*-rtems* | arm*-*-fuchsia*)
- 	  tmake_file="${tmake_file} arm/t-symbian"
- 	  target_cpu_cname="arm10tdmi"
+@@ -1236,6 +1253,10 @@ arm*-*-eabi* | arm*-*-symbianelf* | arm*-*-rtems* | arm*-*-fuchsia*)
+ 	  tm_file="${tm_file} rtems.h arm/rtems.h newlib-stdint.h"
+ 	  tmake_file="${tmake_file} arm/t-bpabi arm/t-rtems"
  	  ;;
 +	arm*-*-zephyr*)
 +	  tm_file="${tm_file} zephyr.h arm/zephyr.h newlib-stdint.h"
 +	  tmake_file="${tmake_file} arm/t-bpabi arm/t-zephyr"
-+	  ;;	  
- 	esac
- 	tm_file="${tm_file} arm/aout.h arm/arm.h"
- 	;;
-@@ -1641,6 +1669,9 @@ x86_64-*-elf*)
++	  ;;
+ 	arm*-*-symbianelf*)
+ 	  tm_file="${tm_file} arm/symbian.h"
+ 	  # We do not include t-bpabi for Symbian OS because the system
+@@ -1654,6 +1675,9 @@ x86_64-*-elf*)
  x86_64-*-rtems*)
  	tm_file="${tm_file} i386/unix.h i386/att.h dbxelf.h elfos.h newlib-stdint.h i386/i386elf.h i386/x86-64.h i386/rtemself.h rtems.h"
  	;;
 +x86_64-*-zephyr*)
-+	tm_file="${tm_file} i386/unix.h i386/att.h dbxelf.h elfos.h newlib-stdint.h i386/i386elf.h i386/x86-64.h i386/zephyr.h zephyr.h"
-+	;;	
++	tm_file="${tm_file} i386/unix.h i386/att.h dbxelf.h elfos.h newlib-stdint.h i386/i386elf.h i386/x86-64.h i386/zephyrelf.h zephyr.h"
++	;;
  i[34567]86-*-rdos*)
      tm_file="${tm_file} i386/unix.h i386/att.h dbxelf.h elfos.h newlib-stdint.h i386/i386elf.h i386/rdos.h"
      ;;
-@@ -1808,6 +1839,10 @@ i[34567]86-*-rtems*)
+@@ -1821,6 +1845,10 @@ i[34567]86-*-rtems*)
  	tm_file="${tm_file} i386/unix.h i386/att.h dbxelf.h elfos.h i386/i386elf.h i386/rtemself.h rtems.h newlib-stdint.h"
  	tmake_file="${tmake_file} i386/t-rtems"
  	;;
 +i[34567]86-*-zephyr*)
-+	tm_file="${tm_file} i386/unix.h i386/att.h dbxelf.h elfos.h i386/i386elf.h i386/zephyr.h zephyr.h newlib-stdint.h"
++	tm_file="${tm_file} i386/unix.h i386/att.h dbxelf.h elfos.h i386/i386elf.h i386/zephyrelf.h zephyr.h newlib-stdint.h"
 +	tmake_file="${tmake_file} i386/t-zephyr"
-+	;;	
++	;;
  i[34567]86-*-solaris2* | x86_64-*-solaris2.1[0-9]*)
  	# Set default arch_32 to pentium4, tune_32 to generic like the other
  	# i386 targets, although config.guess defaults to i386-pc-solaris2*.
-@@ -2185,6 +2220,22 @@ microblaze*-*-rtems*)
+@@ -2198,6 +2226,22 @@ microblaze*-*-rtems*)
  	tmake_file="${tmake_file} microblaze/t-microblaze"
  	tmake_file="${tmake_file} microblaze/t-rtems"
          ;;
@@ -254,11 +226,11 @@ index ddd3b8f4d..87f06158c 100644
 +	cxx_target_objs="${cxx_target_objs} microblaze-c.o"
 +	tmake_file="${tmake_file} microblaze/t-microblaze"
 +	tmake_file="${tmake_file} microblaze/t-zephyr"
-+        ;;		
++        ;;
  microblaze*-*-elf)
  	case $target in
  		microblazeel-*)
-@@ -2213,13 +2264,17 @@ riscv*-*-linux*)
+@@ -2226,12 +2270,12 @@ riscv*-*-linux*)
  	# automatically detect that GAS supports it, yet we require it.
  	gcc_cv_initfini_array=yes
  	;;
@@ -266,59 +238,57 @@ index ddd3b8f4d..87f06158c 100644
 +riscv*-*-elf* | riscv*-*-rtems* | riscv*-*-zephyr*)
  	tm_file="elfos.h newlib-stdint.h ${tm_file} riscv/elf.h"
  	case ${target} in
- 	*-*-rtems*)
- 	  tm_file="${tm_file} rtems.h riscv/rtems.h"
- 	  tmake_file="${tmake_file} riscv/t-rtems"
- 	  ;;
+-	*-*-rtems*)
+-	  tm_file="${tm_file} rtems.h riscv/rtems.h"
+-	  tmake_file="${tmake_file} riscv/t-rtems"
 +	*-*-zephyr*)
 +	  tm_file="${tm_file} zephyr.h riscv/zephyr.h"
 +	  tmake_file="${tmake_file} riscv/t-zephyr"
-+	  ;;	  
+ 	  ;;
  	*)
  	  case "x${enable_multilib}" in
- 	  xno) ;;
-@@ -2449,6 +2504,10 @@ mips*-*-rtems*)
+@@ -2473,6 +2517,10 @@ mips*-*-rtems*)
  	tm_file="elfos.h newlib-stdint.h ${tm_file} mips/elf.h mips/rtems.h rtems.h"
  	tmake_file="${tmake_file} mips/t-elf mips/t-rtems"
  	;;
 +mips*-*-zephyr*)
 +	tm_file="elfos.h newlib-stdint.h ${tm_file} mips/elf.h mips/zephyr.h zephyr.h"
 +	tmake_file="${tmake_file} mips/t-elf mips/t-zephyr"
-+	;;	
++	;;
  mips-wrs-vxworks)
  	tm_file="elfos.h ${tm_file} mips/elf.h vx-common.h vxworks.h mips/vxworks.h"
  	tmake_file="${tmake_file} mips/t-vxworks"
-@@ -2524,6 +2583,10 @@ nios2-*-*)
+@@ -2548,6 +2596,10 @@ nios2-*-*)
  		tm_file="${tm_file} newlib-stdint.h nios2/rtems.h rtems.h"
  		tmake_file="${tmake_file} t-rtems nios2/t-rtems"
  		;;
 +	nios2-*-zephyr*)
 +		tm_file="${tm_file} newlib-stdint.h nios2/zephyr.h zephyr.h"
 +		tmake_file="${tmake_file} t-zephyr nios2/t-zephyr"
-+		;;		
++		;;
          esac
  	;;
  nvptx-*)
-@@ -3021,6 +3084,10 @@ sparc-*-rtems*)
+@@ -3045,6 +3097,10 @@ sparc-*-rtems*)
  	tm_file="${tm_file} dbxelf.h elfos.h sparc/sysv4.h sparc/sp-elf.h sparc/rtemself.h rtems.h newlib-stdint.h"
  	tmake_file="${tmake_file} sparc/t-sparc sparc/t-rtems"
  	;;
 +sparc-*-zephyr*)
-+	tm_file="${tm_file} dbxelf.h elfos.h sparc/sysv4.h sparc/sp-elf.h sparc/zephyr.h zephyr.h newlib-stdint.h"
++	tm_file="${tm_file} dbxelf.h elfos.h sparc/sysv4.h sparc/sp-elf.h sparc/zephyrelf.h zephyr.h newlib-stdint.h"
 +	tmake_file="${tmake_file} sparc/t-sparc sparc/t-zephyr"
-+	;;	
++	;;
  sparc-*-linux*)
  	tm_file="${tm_file} dbxelf.h elfos.h sparc/sysv4.h gnu-user.h linux.h glibc-stdint.h sparc/tso.h"
  	extra_options="${extra_options} sparc/long-double-switch.opt"
-@@ -3075,6 +3142,11 @@ sparc64-*-rtems*)
+@@ -3099,6 +3155,11 @@ sparc64-*-rtems*)
  	extra_options="${extra_options}"
  	tmake_file="${tmake_file} sparc/t-sparc sparc/t-rtems-64"
  	;;
 +sparc64-*-zephyr*)
-+	tm_file="${tm_file} dbxelf.h elfos.h newlib-stdint.h sparc/sysv4.h sparc/sp64-elf.h sparc/zephyr.h zephyr.h"
++	tm_file="${tm_file} dbxelf.h elfos.h newlib-stdint.h sparc/sysv4.h sparc/sp64-elf.h sparc/zephyrelf.h zephyr.h"
 +	extra_options="${extra_options}"
 +	tmake_file="${tmake_file} sparc/t-sparc sparc/t-zephyr-64"
-+	;;	
++	;;
  sparc64-*-linux*)
  	tm_file="sparc/biarch64.h ${tm_file} dbxelf.h elfos.h sparc/sysv4.h gnu-user.h linux.h glibc-stdint.h sparc/default64.h sparc/linux64.h sparc/tso.h"
  	extra_options="${extra_options} sparc/long-double-switch.opt"
@@ -363,11 +333,11 @@ index 000000000..1f25389cb
 +    } while (0)
 diff --git a/gcc/config/arm/zephyr.h b/gcc/config/arm/zephyr.h
 new file mode 100644
-index 000000000..7784fc6df
+index 000000000..1f25389cb
 --- /dev/null
 +++ b/gcc/config/arm/zephyr.h
-@@ -0,0 +1,36 @@
-+/* Definitions for ZephyrOS based ARM systems using EABI.
+@@ -0,0 +1,33 @@
++/* Definitions for ZephyrOS based AARCH64 system.
 +   Copyright (C) 2020 Free Software Foundation, Inc.
 +
 +   This file is part of GCC.
@@ -399,50 +369,14 @@ index 000000000..7784fc6df
 +	builtin_define ("__zephyr__");		\
 +	builtin_define ("__USE_INIT_FINI__");	\
 +	builtin_assert ("system=zephyr");	\
-+	TARGET_BPABI_CPP_BUILTINS();    	\
 +    } while (0)
-+
-+#define ARM_DEFAULT_SHORT_ENUMS false
-diff --git a/gcc/config/i386/zephyr.h b/gcc/config/i386/zephyr.h
+diff --git a/gcc/config/microblaze/t-zephyr b/gcc/config/microblaze/t-zephyr
 new file mode 100644
-index 000000000..e665cbcc6
+index 000000000..b9954445d
 --- /dev/null
-+++ b/gcc/config/i386/zephyr.h
-@@ -0,0 +1,34 @@
-+/* Definitions for Zephyr OS based x86 systems with ELF format.
-+   Copyright (C) 2020 Free Software Foundation, Inc.
-+
-+   This file is part of GCC.
-+
-+   GCC is free software; you can redistribute it and/or modify it
-+   under the terms of the GNU General Public License as published
-+   by the Free Software Foundation; either version 3, or (at your
-+   option) any later version.
-+
-+   GCC is distributed in the hope that it will be useful, but WITHOUT
-+   ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
-+   or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public
-+   License for more details.
-+
-+   Under Section 7 of GPL version 3, you are granted additional
-+   permissions described in the GCC Runtime Library Exception, version
-+   3.1, as published by the Free Software Foundation.
-+
-+   You should have received a copy of the GNU General Public License and
-+   a copy of the GCC Runtime Library Exception along with this program;
-+   see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see
-+   <http://www.gnu.org/licenses/>.  */
-+
-+/* Specify predefined symbols in preprocessor.  */
-+
-+#define TARGET_OS_CPP_BUILTINS()		\
-+  do						\
-+    {						\
-+	builtin_define ("__zephyr__");		\
-+	builtin_define ("__USE_INIT_FINI__");	\
-+	builtin_assert ("system=zephyr");	\
-+    }						\
-+  while (0)
++++ b/gcc/config/microblaze/t-zephyr
+@@ -0,0 +1 @@
++# Custom multilibs for Zephyr OS
 diff --git a/gcc/config/microblaze/zephyr.h b/gcc/config/microblaze/zephyr.h
 new file mode 100644
 index 000000000..038ee5acb
@@ -524,6 +458,145 @@ index 000000000..70d14e807
 + */
 +#undef MIPS_DEFAULT_GVALUE
 +#define MIPS_DEFAULT_GVALUE 0
+diff --git a/gcc/config/nios2/t-zephyr b/gcc/config/nios2/t-zephyr
+new file mode 100644
+index 000000000..280e7be6e
+--- /dev/null
++++ b/gcc/config/nios2/t-zephyr
+@@ -0,0 +1,133 @@
++# Custom Zephyr multilibs
++
++MULTILIB_OPTIONS = mhw-mul mhw-mulx mhw-div mcustom-fadds=253 mcustom-fdivs=255 mcustom-fmuls=252 mcustom-fsubs=254
++
++# Enumeration of multilibs
++
++# MULTILIB_EXCEPTIONS += mhw-mul/mhw-mulx/mhw-div/mcustom-fadds=253/mcustom-fdivs=255/mcustom-fmuls=252/mcustom-fsubs=254
++MULTILIB_EXCEPTIONS += mhw-mul/mhw-mulx/mhw-div/mcustom-fadds=253/mcustom-fdivs=255/mcustom-fmuls=252
++MULTILIB_EXCEPTIONS += mhw-mul/mhw-mulx/mhw-div/mcustom-fadds=253/mcustom-fdivs=255/mcustom-fsubs=254
++MULTILIB_EXCEPTIONS += mhw-mul/mhw-mulx/mhw-div/mcustom-fadds=253/mcustom-fdivs=255
++MULTILIB_EXCEPTIONS += mhw-mul/mhw-mulx/mhw-div/mcustom-fadds=253/mcustom-fmuls=252/mcustom-fsubs=254
++MULTILIB_EXCEPTIONS += mhw-mul/mhw-mulx/mhw-div/mcustom-fadds=253/mcustom-fmuls=252
++MULTILIB_EXCEPTIONS += mhw-mul/mhw-mulx/mhw-div/mcustom-fadds=253/mcustom-fsubs=254
++MULTILIB_EXCEPTIONS += mhw-mul/mhw-mulx/mhw-div/mcustom-fadds=253
++MULTILIB_EXCEPTIONS += mhw-mul/mhw-mulx/mhw-div/mcustom-fdivs=255/mcustom-fmuls=252/mcustom-fsubs=254
++MULTILIB_EXCEPTIONS += mhw-mul/mhw-mulx/mhw-div/mcustom-fdivs=255/mcustom-fmuls=252
++MULTILIB_EXCEPTIONS += mhw-mul/mhw-mulx/mhw-div/mcustom-fdivs=255/mcustom-fsubs=254
++MULTILIB_EXCEPTIONS += mhw-mul/mhw-mulx/mhw-div/mcustom-fdivs=255
++MULTILIB_EXCEPTIONS += mhw-mul/mhw-mulx/mhw-div/mcustom-fmuls=252/mcustom-fsubs=254
++MULTILIB_EXCEPTIONS += mhw-mul/mhw-mulx/mhw-div/mcustom-fmuls=252
++MULTILIB_EXCEPTIONS += mhw-mul/mhw-mulx/mhw-div/mcustom-fsubs=254
++# MULTILIB_EXCEPTIONS += mhw-mul/mhw-mulx/mhw-div
++MULTILIB_EXCEPTIONS += mhw-mul/mhw-mulx/mcustom-fadds=253/mcustom-fdivs=255/mcustom-fmuls=252/mcustom-fsubs=254
++MULTILIB_EXCEPTIONS += mhw-mul/mhw-mulx/mcustom-fadds=253/mcustom-fdivs=255/mcustom-fmuls=252
++MULTILIB_EXCEPTIONS += mhw-mul/mhw-mulx/mcustom-fadds=253/mcustom-fdivs=255/mcustom-fsubs=254
++MULTILIB_EXCEPTIONS += mhw-mul/mhw-mulx/mcustom-fadds=253/mcustom-fdivs=255
++MULTILIB_EXCEPTIONS += mhw-mul/mhw-mulx/mcustom-fadds=253/mcustom-fmuls=252/mcustom-fsubs=254
++MULTILIB_EXCEPTIONS += mhw-mul/mhw-mulx/mcustom-fadds=253/mcustom-fmuls=252
++MULTILIB_EXCEPTIONS += mhw-mul/mhw-mulx/mcustom-fadds=253/mcustom-fsubs=254
++MULTILIB_EXCEPTIONS += mhw-mul/mhw-mulx/mcustom-fadds=253
++MULTILIB_EXCEPTIONS += mhw-mul/mhw-mulx/mcustom-fdivs=255/mcustom-fmuls=252/mcustom-fsubs=254
++MULTILIB_EXCEPTIONS += mhw-mul/mhw-mulx/mcustom-fdivs=255/mcustom-fmuls=252
++MULTILIB_EXCEPTIONS += mhw-mul/mhw-mulx/mcustom-fdivs=255/mcustom-fsubs=254
++MULTILIB_EXCEPTIONS += mhw-mul/mhw-mulx/mcustom-fdivs=255
++MULTILIB_EXCEPTIONS += mhw-mul/mhw-mulx/mcustom-fmuls=252/mcustom-fsubs=254
++MULTILIB_EXCEPTIONS += mhw-mul/mhw-mulx/mcustom-fmuls=252
++MULTILIB_EXCEPTIONS += mhw-mul/mhw-mulx/mcustom-fsubs=254
++MULTILIB_EXCEPTIONS += mhw-mul/mhw-mulx
++MULTILIB_EXCEPTIONS += mhw-mul/mhw-div/mcustom-fadds=253/mcustom-fdivs=255/mcustom-fmuls=252/mcustom-fsubs=254
++MULTILIB_EXCEPTIONS += mhw-mul/mhw-div/mcustom-fadds=253/mcustom-fdivs=255/mcustom-fmuls=252
++MULTILIB_EXCEPTIONS += mhw-mul/mhw-div/mcustom-fadds=253/mcustom-fdivs=255/mcustom-fsubs=254
++MULTILIB_EXCEPTIONS += mhw-mul/mhw-div/mcustom-fadds=253/mcustom-fdivs=255
++MULTILIB_EXCEPTIONS += mhw-mul/mhw-div/mcustom-fadds=253/mcustom-fmuls=252/mcustom-fsubs=254
++MULTILIB_EXCEPTIONS += mhw-mul/mhw-div/mcustom-fadds=253/mcustom-fmuls=252
++MULTILIB_EXCEPTIONS += mhw-mul/mhw-div/mcustom-fadds=253/mcustom-fsubs=254
++MULTILIB_EXCEPTIONS += mhw-mul/mhw-div/mcustom-fadds=253
++MULTILIB_EXCEPTIONS += mhw-mul/mhw-div/mcustom-fdivs=255/mcustom-fmuls=252/mcustom-fsubs=254
++MULTILIB_EXCEPTIONS += mhw-mul/mhw-div/mcustom-fdivs=255/mcustom-fmuls=252
++MULTILIB_EXCEPTIONS += mhw-mul/mhw-div/mcustom-fdivs=255/mcustom-fsubs=254
++MULTILIB_EXCEPTIONS += mhw-mul/mhw-div/mcustom-fdivs=255
++MULTILIB_EXCEPTIONS += mhw-mul/mhw-div/mcustom-fmuls=252/mcustom-fsubs=254
++MULTILIB_EXCEPTIONS += mhw-mul/mhw-div/mcustom-fmuls=252
++MULTILIB_EXCEPTIONS += mhw-mul/mhw-div/mcustom-fsubs=254
++MULTILIB_EXCEPTIONS += mhw-mul/mhw-div
++MULTILIB_EXCEPTIONS += mhw-mul/mcustom-fadds=253/mcustom-fdivs=255/mcustom-fmuls=252/mcustom-fsubs=254
++MULTILIB_EXCEPTIONS += mhw-mul/mcustom-fadds=253/mcustom-fdivs=255/mcustom-fmuls=252
++MULTILIB_EXCEPTIONS += mhw-mul/mcustom-fadds=253/mcustom-fdivs=255/mcustom-fsubs=254
++MULTILIB_EXCEPTIONS += mhw-mul/mcustom-fadds=253/mcustom-fdivs=255
++MULTILIB_EXCEPTIONS += mhw-mul/mcustom-fadds=253/mcustom-fmuls=252/mcustom-fsubs=254
++MULTILIB_EXCEPTIONS += mhw-mul/mcustom-fadds=253/mcustom-fmuls=252
++MULTILIB_EXCEPTIONS += mhw-mul/mcustom-fadds=253/mcustom-fsubs=254
++MULTILIB_EXCEPTIONS += mhw-mul/mcustom-fadds=253
++MULTILIB_EXCEPTIONS += mhw-mul/mcustom-fdivs=255/mcustom-fmuls=252/mcustom-fsubs=254
++MULTILIB_EXCEPTIONS += mhw-mul/mcustom-fdivs=255/mcustom-fmuls=252
++MULTILIB_EXCEPTIONS += mhw-mul/mcustom-fdivs=255/mcustom-fsubs=254
++MULTILIB_EXCEPTIONS += mhw-mul/mcustom-fdivs=255
++MULTILIB_EXCEPTIONS += mhw-mul/mcustom-fmuls=252/mcustom-fsubs=254
++MULTILIB_EXCEPTIONS += mhw-mul/mcustom-fmuls=252
++MULTILIB_EXCEPTIONS += mhw-mul/mcustom-fsubs=254
++# MULTILIB_EXCEPTIONS += mhw-mul
++MULTILIB_EXCEPTIONS += mhw-mulx/mhw-div/mcustom-fadds=253/mcustom-fdivs=255/mcustom-fmuls=252/mcustom-fsubs=254
++MULTILIB_EXCEPTIONS += mhw-mulx/mhw-div/mcustom-fadds=253/mcustom-fdivs=255/mcustom-fmuls=252
++MULTILIB_EXCEPTIONS += mhw-mulx/mhw-div/mcustom-fadds=253/mcustom-fdivs=255/mcustom-fsubs=254
++MULTILIB_EXCEPTIONS += mhw-mulx/mhw-div/mcustom-fadds=253/mcustom-fdivs=255
++MULTILIB_EXCEPTIONS += mhw-mulx/mhw-div/mcustom-fadds=253/mcustom-fmuls=252/mcustom-fsubs=254
++MULTILIB_EXCEPTIONS += mhw-mulx/mhw-div/mcustom-fadds=253/mcustom-fmuls=252
++MULTILIB_EXCEPTIONS += mhw-mulx/mhw-div/mcustom-fadds=253/mcustom-fsubs=254
++MULTILIB_EXCEPTIONS += mhw-mulx/mhw-div/mcustom-fadds=253
++MULTILIB_EXCEPTIONS += mhw-mulx/mhw-div/mcustom-fdivs=255/mcustom-fmuls=252/mcustom-fsubs=254
++MULTILIB_EXCEPTIONS += mhw-mulx/mhw-div/mcustom-fdivs=255/mcustom-fmuls=252
++MULTILIB_EXCEPTIONS += mhw-mulx/mhw-div/mcustom-fdivs=255/mcustom-fsubs=254
++MULTILIB_EXCEPTIONS += mhw-mulx/mhw-div/mcustom-fdivs=255
++MULTILIB_EXCEPTIONS += mhw-mulx/mhw-div/mcustom-fmuls=252/mcustom-fsubs=254
++MULTILIB_EXCEPTIONS += mhw-mulx/mhw-div/mcustom-fmuls=252
++MULTILIB_EXCEPTIONS += mhw-mulx/mhw-div/mcustom-fsubs=254
++MULTILIB_EXCEPTIONS += mhw-mulx/mhw-div
++MULTILIB_EXCEPTIONS += mhw-mulx/mcustom-fadds=253/mcustom-fdivs=255/mcustom-fmuls=252/mcustom-fsubs=254
++MULTILIB_EXCEPTIONS += mhw-mulx/mcustom-fadds=253/mcustom-fdivs=255/mcustom-fmuls=252
++MULTILIB_EXCEPTIONS += mhw-mulx/mcustom-fadds=253/mcustom-fdivs=255/mcustom-fsubs=254
++MULTILIB_EXCEPTIONS += mhw-mulx/mcustom-fadds=253/mcustom-fdivs=255
++MULTILIB_EXCEPTIONS += mhw-mulx/mcustom-fadds=253/mcustom-fmuls=252/mcustom-fsubs=254
++MULTILIB_EXCEPTIONS += mhw-mulx/mcustom-fadds=253/mcustom-fmuls=252
++MULTILIB_EXCEPTIONS += mhw-mulx/mcustom-fadds=253/mcustom-fsubs=254
++MULTILIB_EXCEPTIONS += mhw-mulx/mcustom-fadds=253
++MULTILIB_EXCEPTIONS += mhw-mulx/mcustom-fdivs=255/mcustom-fmuls=252/mcustom-fsubs=254
++MULTILIB_EXCEPTIONS += mhw-mulx/mcustom-fdivs=255/mcustom-fmuls=252
++MULTILIB_EXCEPTIONS += mhw-mulx/mcustom-fdivs=255/mcustom-fsubs=254
++MULTILIB_EXCEPTIONS += mhw-mulx/mcustom-fdivs=255
++MULTILIB_EXCEPTIONS += mhw-mulx/mcustom-fmuls=252/mcustom-fsubs=254
++MULTILIB_EXCEPTIONS += mhw-mulx/mcustom-fmuls=252
++MULTILIB_EXCEPTIONS += mhw-mulx/mcustom-fsubs=254
++MULTILIB_EXCEPTIONS += mhw-mulx
++MULTILIB_EXCEPTIONS += mhw-div/mcustom-fadds=253/mcustom-fdivs=255/mcustom-fmuls=252/mcustom-fsubs=254
++MULTILIB_EXCEPTIONS += mhw-div/mcustom-fadds=253/mcustom-fdivs=255/mcustom-fmuls=252
++MULTILIB_EXCEPTIONS += mhw-div/mcustom-fadds=253/mcustom-fdivs=255/mcustom-fsubs=254
++MULTILIB_EXCEPTIONS += mhw-div/mcustom-fadds=253/mcustom-fdivs=255
++MULTILIB_EXCEPTIONS += mhw-div/mcustom-fadds=253/mcustom-fmuls=252/mcustom-fsubs=254
++MULTILIB_EXCEPTIONS += mhw-div/mcustom-fadds=253/mcustom-fmuls=252
++MULTILIB_EXCEPTIONS += mhw-div/mcustom-fadds=253/mcustom-fsubs=254
++MULTILIB_EXCEPTIONS += mhw-div/mcustom-fadds=253
++MULTILIB_EXCEPTIONS += mhw-div/mcustom-fdivs=255/mcustom-fmuls=252/mcustom-fsubs=254
++MULTILIB_EXCEPTIONS += mhw-div/mcustom-fdivs=255/mcustom-fmuls=252
++MULTILIB_EXCEPTIONS += mhw-div/mcustom-fdivs=255/mcustom-fsubs=254
++MULTILIB_EXCEPTIONS += mhw-div/mcustom-fdivs=255
++MULTILIB_EXCEPTIONS += mhw-div/mcustom-fmuls=252/mcustom-fsubs=254
++MULTILIB_EXCEPTIONS += mhw-div/mcustom-fmuls=252
++MULTILIB_EXCEPTIONS += mhw-div/mcustom-fsubs=254
++MULTILIB_EXCEPTIONS += mhw-div
++MULTILIB_EXCEPTIONS += mcustom-fadds=253/mcustom-fdivs=255/mcustom-fmuls=252/mcustom-fsubs=254
++MULTILIB_EXCEPTIONS += mcustom-fadds=253/mcustom-fdivs=255/mcustom-fmuls=252
++MULTILIB_EXCEPTIONS += mcustom-fadds=253/mcustom-fdivs=255/mcustom-fsubs=254
++MULTILIB_EXCEPTIONS += mcustom-fadds=253/mcustom-fdivs=255
++MULTILIB_EXCEPTIONS += mcustom-fadds=253/mcustom-fmuls=252/mcustom-fsubs=254
++MULTILIB_EXCEPTIONS += mcustom-fadds=253/mcustom-fmuls=252
++MULTILIB_EXCEPTIONS += mcustom-fadds=253/mcustom-fsubs=254
++MULTILIB_EXCEPTIONS += mcustom-fadds=253
++MULTILIB_EXCEPTIONS += mcustom-fdivs=255/mcustom-fmuls=252/mcustom-fsubs=254
++MULTILIB_EXCEPTIONS += mcustom-fdivs=255/mcustom-fmuls=252
++MULTILIB_EXCEPTIONS += mcustom-fdivs=255/mcustom-fsubs=254
++MULTILIB_EXCEPTIONS += mcustom-fdivs=255
++MULTILIB_EXCEPTIONS += mcustom-fmuls=252/mcustom-fsubs=254
++MULTILIB_EXCEPTIONS += mcustom-fmuls=252
++MULTILIB_EXCEPTIONS += mcustom-fsubs=254
 diff --git a/gcc/config/nios2/zephyr.h b/gcc/config/nios2/zephyr.h
 new file mode 100644
 index 000000000..59e5f3408
@@ -567,6 +640,37 @@ index 000000000..59e5f3408
 +
 +   This is done so RTEMS targets have Thread Local Storage like Linux.  */
 +#define TARGET_LINUX_ABI 1
+diff --git a/gcc/config/riscv/t-zephyr b/gcc/config/riscv/t-zephyr
+new file mode 100644
+index 000000000..41f5927fc
+--- /dev/null
++++ b/gcc/config/riscv/t-zephyr
+@@ -0,0 +1,25 @@
++MULTILIB_OPTIONS	=
++MULTILIB_DIRNAMES	=
++
++MULTILIB_OPTIONS	+= march=rv32i/march=rv32im/march=rv32imafd/march=rv32iac/march=rv32imac/march=rv32imafc/march=rv64imafd/march=rv64imac/march=rv64imafdc
++MULTILIB_DIRNAMES	+= rv32i       rv32im       rv32imafd       rv32iac       rv32imac       rv32imafc       rv64imafd       rv64imac       rv64imafdc
++
++MULTILIB_OPTIONS	+= mabi=ilp32/mabi=ilp32f/mabi=ilp32d/mabi=lp64/mabi=lp64d
++MULTILIB_DIRNAMES	+= ilp32      ilp32f      ilp32d      lp64      lp64d
++
++MULTILIB_OPTIONS	+= mcmodel=medany
++MULTILIB_DIRNAMES	+= medany
++
++MULTILIB_REQUIRED	=
++MULTILIB_REQUIRED	+= march=rv32i/mabi=ilp32
++MULTILIB_REQUIRED	+= march=rv32im/mabi=ilp32
++MULTILIB_REQUIRED	+= march=rv32imafd/mabi=ilp32d
++MULTILIB_REQUIRED	+= march=rv32iac/mabi=ilp32
++MULTILIB_REQUIRED	+= march=rv32imac/mabi=ilp32
++MULTILIB_REQUIRED	+= march=rv32imafc/mabi=ilp32f
++MULTILIB_REQUIRED	+= march=rv64imafd/mabi=lp64d
++MULTILIB_REQUIRED	+= march=rv64imafd/mabi=lp64d/mcmodel=medany
++MULTILIB_REQUIRED	+= march=rv64imac/mabi=lp64
++MULTILIB_REQUIRED	+= march=rv64imac/mabi=lp64/mcmodel=medany
++MULTILIB_REQUIRED	+= march=rv64imafdc/mabi=lp64d
++MULTILIB_REQUIRED	+= march=rv64imafdc/mabi=lp64d/mcmodel=medany
 diff --git a/gcc/config/riscv/zephyr.h b/gcc/config/riscv/zephyr.h
 new file mode 100644
 index 000000000..a82ff4ca7
@@ -652,11 +756,11 @@ index 000000000..3694b27c4
 +
 diff --git a/gcc/config/zephyr.opt b/gcc/config/zephyr.opt
 new file mode 100644
-index 000000000..7618ed3a9
+index 000000000..34a244197
 --- /dev/null
 +++ b/gcc/config/zephyr.opt
 @@ -0,0 +1,29 @@
-+; Zephyr OS options.
++; RTEMS options.
 +
 +; Copyright (C) 2010-2019 Free Software Foundation, Inc.
 +;
@@ -686,10 +790,10 @@ index 000000000..7618ed3a9
 +
 +; This comment is to ensure we retain the blank line above.
 diff --git a/gcc/configure b/gcc/configure
-index 481071b42..8ef2f7b4a 100755
+index 58cd314cc..f145a1770 100755
 --- a/gcc/configure
 +++ b/gcc/configure
-@@ -11861,7 +11861,7 @@ case ${enable_threads} in
+@@ -11866,7 +11866,7 @@ case ${enable_threads} in
      target_thread_file='single'
      ;;
    aix | dce | lynx | mipssde | posix | rtems | \
@@ -789,23 +893,23 @@ index 000000000..b9dc73ea9
 +  _z_libatomic_unlock_n (ptr, n);
 +}
 diff --git a/libatomic/configure.tgt b/libatomic/configure.tgt
-index ecbb7d33c..e8a31edc4 100644
+index ecbb7d33c..aeb74b5ee 100644
 --- a/libatomic/configure.tgt
 +++ b/libatomic/configure.tgt
-@@ -158,6 +158,11 @@ case "${target}" in
- 	XCFLAGS="${configure_tgt_pre_target_cpu_XCFLAGS}"
+@@ -159,6 +159,11 @@ case "${target}" in
  	config_path="rtems"
  	;;
-+	
+ 
 +  *-*-zephyr*)
 +	XCFLAGS="${configure_tgt_pre_target_cpu_XCFLAGS}"
 +	config_path="zephyr"
 +	;;
- 
++
    *-*-elf*)
  	# ??? No target OS.  We could be targeting bare-metal kernel-mode,
+ 	# or user-mode for some custom OS.  If the target supports TAS,
 diff --git a/libgcc/config.host b/libgcc/config.host
-index 91abc84da..417284bfe 100644
+index 1d4e4a610..09a697a58 100644
 --- a/libgcc/config.host
 +++ b/libgcc/config.host
 @@ -321,6 +321,10 @@ case ${host} in
@@ -815,7 +919,7 @@ index 91abc84da..417284bfe 100644
 +*-*-zephyr*)
 +  tmake_file="$tmake_file t-zephyr"
 +  extra_parts="crtbegin.o crtend.o"
-+  ;;  
++  ;;
  *-*-elf)
    extra_parts="crtbegin.o crtend.o"
    ;;
@@ -842,76 +946,78 @@ index 91abc84da..417284bfe 100644
  	  tmake_file="${tmake_file} arm/t-bpabi t-crtfm"
  	  extra_parts="crtbegin.o crtend.o crti.o crtn.o"
  	  ;;
-@@ -632,10 +636,10 @@ i[34567]86-*-elfiamcu)
+@@ -629,13 +633,13 @@ x86_64-*-darwin*)
+ i[34567]86-*-elfiamcu)
+ 	tmake_file="$tmake_file i386/t-crtstuff t-softfp-sfdftf i386/32/t-softfp i386/32/t-iamcu i386/t-softfp t-softfp t-dfprules"
+ 	;;
+-i586-zephyr-elf)
++i[34567]86-*-zephyr*)
+ 	tmake_file="$tmake_file i386/t-crtstuff t-softfp-sfdf i386/32/t-zephyr i386/t-softfp t-softfp t-dfprules"
+ 	;;
  i[34567]86-*-elf*)
  	tmake_file="$tmake_file i386/t-crtstuff t-crtstuff-pic t-libgcc-pic"
  	;;
--x86_64-*-elf* | x86_64-*-rtems*)
-+x86_64-*-elf* | x86_64-*-rtems* | x86_64-*-zephyr*)
- 	tmake_file="$tmake_file i386/t-crtstuff t-crtstuff-pic t-libgcc-pic"
- 	case ${host} in
--	  x86_64-*-rtems*)
-+	  x86_64-*-rtems* | x86_64-*-zephyr*)
- 	    extra_parts="$extra_parts crti.o crtn.o"
- 	    ;;
- 	esac
-@@ -699,7 +703,7 @@ i[34567]86-*-nto-qnx*)
- 	tmake_file="$tmake_file i386/t-nto t-libgcc-pic"
- 	extra_parts=crtbegin.o
+-x86_64-zephyr-elf)
++x86_64-*-zephyr*)
+ 	tmake_file="$tmake_file i386/t-crtstuff i386/64/t-zephyr64 t-dfprules"
  	;;
--i[34567]86-*-rtems*)
-+i[34567]86-*-rtems* | i[34567]86-*-zephyr*)
- 	tmake_file="$tmake_file i386/t-crtstuff t-softfp-sfdftf i386/32/t-softfp i386/t-softfp t-softfp"
- 	extra_parts="$extra_parts crti.o crtn.o"
- 	;;
-@@ -904,7 +908,7 @@ microblaze*-*-elf)
+ x86_64-*-elf* | x86_64-*-rtems*)
+@@ -914,6 +918,10 @@ microblaze*-*-rtems*)
  	tmake_file="${tmake_file} microblaze/t-microblaze t-fdpbit"
  	extra_parts="$extra_parts crtbeginS.o crtendS.o crtbeginT.o crti.o crtn.o"
  	;;
--microblaze*-*-rtems*)
-+microblaze*-*-rtems* | microblaze*-*-zephyr*)
- 	tmake_file="${tmake_file} microblaze/t-microblaze t-fdpbit"
- 	extra_parts="$extra_parts crtbeginS.o crtendS.o crtbeginT.o crti.o crtn.o"
++microblaze*-*-zephyr*)
++	tmake_file="${tmake_file} microblaze/t-microblaze t-fdpbit"
++	extra_parts="$extra_parts crtbeginS.o crtendS.o crtbeginT.o crti.o crtn.o"
++	;;
+ mips*-*-netbsd*)			# NetBSD/mips, either endian.
  	;;
-@@ -978,7 +982,7 @@ mips64orion-*-elf* | mips64orionel-*-elf*)
+ mips*-*-linux*)				# Linux MIPS, either endian.
+@@ -988,6 +996,10 @@ mips*-*-rtems*)
  	tmake_file="$tmake_file mips/t-elf mips/t-crtstuff mips/t-mips16"
  	extra_parts="$extra_parts crti.o crtn.o"
  	;;
--mips*-*-rtems*)
-+mips*-*-rtems* | mips*-*-zephyr*)
- 	tmake_file="$tmake_file mips/t-elf mips/t-crtstuff mips/t-mips16"
- 	extra_parts="$extra_parts crti.o crtn.o"
++mips*-*-zephyr*)
++	tmake_file="$tmake_file mips/t-elf mips/t-crtstuff mips/t-mips16"
++	extra_parts="$extra_parts crti.o crtn.o"
++	;;
+ mips-wrs-vxworks)
  	;;
-@@ -1304,7 +1308,7 @@ sparc-*-linux*)		# SPARC's running GNU/Linux, libc6
- 	extra_parts="$extra_parts crtfastmath.o"
- 	md_unwind_header=sparc/linux-unwind.h
- 	;;
--sparc-*-rtems*)
-+sparc-*-rtems* | sparc-*-zephyr*)
+ mipstx39-*-elf* | mipstx39el-*-elf*)
+@@ -1314,6 +1326,10 @@ sparc-*-rtems*)
  	tmake_file="$tmake_file sparc/t-elf sparc/t-softmul t-crtfm t-fdpbit"
  	extra_parts="$extra_parts crti.o crtn.o crtfastmath.o"
  	;;
-@@ -1317,7 +1321,7 @@ sparc64-*-elf*)
- 	tmake_file="${tmake_file} t-crtfm"
- 	extra_parts="$extra_parts crti.o crtn.o crtfastmath.o"
- 	;;
--sparc64-*-rtems*)
-+sparc64-*-rtems* | sparc64-*-zephyr*)
++sparc-*-zephyr*)
++	tmake_file="$tmake_file sparc/t-elf sparc/t-softmul t-crtfm t-fdpbit"
++	extra_parts="$extra_parts crti.o crtn.o crtfastmath.o"
++	;;
+ sparc*-*-solaris2*)
+ 	tmake_file="$tmake_file t-crtfm"
+ 	extra_parts="$extra_parts crtfastmath.o"
+@@ -1327,6 +1343,10 @@ sparc64-*-rtems*)
  	tmake_file="$tmake_file t-crtfm"
  	extra_parts="$extra_parts crti.o crtn.o crtfastmath.o"
  	;;
-@@ -1445,7 +1449,7 @@ i[34567]86-*-linux* | x86_64-*-linux* | \
++sparc64-*-zephyr*)
++	tmake_file="$tmake_file t-crtfm"
++	extra_parts="$extra_parts crti.o crtn.o crtfastmath.o"
++	;;
+ sparc-wrs-vxworks)
+ 	;;
+ sparc64-*-freebsd*|ultrasparc-*-freebsd*)
+@@ -1451,7 +1471,7 @@ i[34567]86-*-linux* | x86_64-*-linux* | \
  esac
  
  case ${host} in
--i[34567]86-*-elfiamcu | i[34567]86-*-rtems*)
-+i[34567]86-*-elfiamcu | i[34567]86-*-rtems* | i[34567]86-*-zephyr*)
+-i[34567]86-*-elfiamcu | i[34567]86-zephyr-elf | i[34567]86-*-rtems*)
++i[34567]86-*-elfiamcu | i[34567]86-*-zephyr* | i[34567]86-*-rtems*)
  	# These use soft-fp for SFmode and DFmode, not just TFmode.
  	;;
  i[34567]86-*-* | x86_64-*-*)
 diff --git a/libgcc/config/gthr-zephyr.h b/libgcc/config/gthr-zephyr.h
 new file mode 100644
-index 000000000..37a6e13bd
+index 000000000..0918d0025
 --- /dev/null
 +++ b/libgcc/config/gthr-zephyr.h
 @@ -0,0 +1,239 @@
@@ -945,7 +1051,7 @@ index 000000000..37a6e13bd
 +#define GCC_GTHR_ZEPHYR_H
 +
 +#include <sys/lock.h>
-+#include <stdint.h>
++#include <pthread.h>
 +#include <sched.h>
 +
 +#ifdef __cplusplus
@@ -962,9 +1068,9 @@ index 000000000..37a6e13bd
 +typedef struct _z_gthread_cond_t __gthread_cond_t;
 +typedef struct timespec __gthread_time_t;
 +
-+typedef _z_gthread_t __gthread_t;
-+typedef _z_gthread_key_t __gthread_key_t;
-+typedef _z_gthread_once_t __gthread_once_t;
++typedef pthread_t __gthread_t;
++typedef pthread_key_t __gthread_key_t;
++typedef pthread_once_t __gthread_once_t;
 +
 +
 +#define __GTHREAD_ONCE_INIT 0
@@ -986,31 +1092,31 @@ index 000000000..37a6e13bd
 +__gthread_create (__gthread_t *__threadid, void *(*__func) (void *),
 +		  void *__args)
 +{
-+  return _z_gthread_create (__threadid, __func, __args);
++  return pthread_create (__threadid, __func, __args);
 +}
 +
 +static inline int
 +__gthread_join (__gthread_t __threadid, void **__value_ptr)
 +{
-+  return _z_gthread_join (__threadid, __value_ptr);
++  return pthread_join (__threadid, __value_ptr);
 +}
 +
 +static inline int
 +__gthread_detach (__gthread_t __threadid)
 +{
-+  return _z_gthread_detach (__threadid);
++  return pthread_detach (__threadid);
 +}
 +
 +static inline int
 +__gthread_equal (__gthread_t __t1, __gthread_t __t2)
 +{
-+  return _z_gthread_equal (__t1, __t2);
++  return pthread_equal (__t1, __t2);
 +}
 +
 +static inline __gthread_t
 +__gthread_self (void)
 +{
-+  return _z_gthread_self ();
++  return pthread_self ();
 +}
 +
 +static inline int
@@ -1022,31 +1128,31 @@ index 000000000..37a6e13bd
 +static inline int
 +__gthread_once (__gthread_once_t *__once, void (*__func) (void))
 +{
-+   return _z_gthread_once (__once, __func);
++   return pthread_once (__once, __func);
 +}
 +
 +static inline int
 +__gthread_key_create (__gthread_key_t *__key, void (*__dtor) (void *))
 +{
-+  return _z_gthread_key_create (__key, __dtor);
++  return pthread_key_create (__key, __dtor);
 +}
 +
 +static inline int
 +__gthread_key_delete (__gthread_key_t __key)
 +{
-+  return _z_gthread_key_delete (__key);
++  return pthread_key_delete (__key);
 +}
 +
 +static inline void *
 +__gthread_getspecific (__gthread_key_t __key)
 +{
-+  return _z_gthread_getspecific (__key);
++  return pthread_getspecific (__key);
 +}
 +
 +static inline int
 +__gthread_setspecific (__gthread_key_t __key, const void *__ptr)
 +{
-+  return _z_gthread_setspecific (__key, __ptr);
++  return pthread_setspecific (__key, __ptr);
 +}
 +
 +static inline int
@@ -1155,10 +1261,10 @@ index 000000000..37a6e13bd
 +
 +#endif /* ! GCC_GTHR_ZEPHYR_H */
 diff --git a/libgcc/configure b/libgcc/configure
-index 36dbbc1f6..95948123f 100644
+index ff83b800e..c998fd73d 100644
 --- a/libgcc/configure
 +++ b/libgcc/configure
-@@ -5550,6 +5550,7 @@ case $target_thread_file in
+@@ -5566,6 +5566,7 @@ case $target_thread_file in
      tpf)	thread_header=config/s390/gthr-tpf.h ;;
      vxworks)	thread_header=config/gthr-vxworks.h ;;
      win32)	thread_header=config/i386/gthr-win32.h ;;
@@ -1167,7 +1273,7 @@ index 36dbbc1f6..95948123f 100644
  
  
 diff --git a/libstdc++-v3/acinclude.m4 b/libstdc++-v3/acinclude.m4
-index 0112d645a..17b744b24 100644
+index 0112d645a..bcd1531cf 100644
 --- a/libstdc++-v3/acinclude.m4
 +++ b/libstdc++-v3/acinclude.m4
 @@ -1423,7 +1423,7 @@ AC_DEFUN([GLIBCXX_ENABLE_LIBSTDCXX_TIME], [
@@ -1185,12 +1291,12 @@ index 0112d645a..17b744b24 100644
          ;;
 +      zephyr*)
 +        enable_libstdcxx_filesystem_ts=no
-+        ;;        
++        ;;
        *)
          enable_libstdcxx_filesystem_ts=no
          ;;
 diff --git a/libstdc++-v3/configure b/libstdc++-v3/configure
-index 5acf79cba..1cc1eb588 100755
+index 18c81f0f8..8b789808b 100755
 --- a/libstdc++-v3/configure
 +++ b/libstdc++-v3/configure
 @@ -15426,6 +15426,7 @@ case $target_thread_file in
@@ -1215,49 +1321,42 @@ index 5acf79cba..1cc1eb588 100755
  
      ;;
 -  *-rtems*)
-+  *-rtems* | zephyr*)
++  *-rtems* | *-zephyr*)
  
    # All these tests are for C++; save the language and the compiler flags.
    # The CXXFLAGS thing is suspicious, but based on similar bits previously
-@@ -80363,6 +80364,9 @@ $as_echo_n "checking whether to build Filesystem TS support... " >&6; }
-       solaris*)
-         enable_libstdcxx_filesystem_ts=yes
-         ;;
-+      zephyr*)
-+        enable_libstdcxx_filesystem_ts=no 
-+        ;;      
-       *)
-         enable_libstdcxx_filesystem_ts=no
-         ;;
 diff --git a/libstdc++-v3/configure.host b/libstdc++-v3/configure.host
-index f2ff1295d..be4630a75 100644
+index 437c4954f..d12672eaa 100644
 --- a/libstdc++-v3/configure.host
 +++ b/libstdc++-v3/configure.host
-@@ -318,6 +318,11 @@ case "${host_os}" in
+@@ -318,6 +318,10 @@ case "${host_os}" in
    vxworks)
      os_include_dir="os/vxworks"
      ;;
 +  zephyr*)
 +    os_include_dir="os/generic"
-+    # Use libatomic if necessary and avoid libstdc++ specific atomicity support
 +    atomicity_dir="cpu/generic/atomicity_builtins"
 +    ;;
    *)
      os_include_dir="os/generic"
      ;;
 diff --git a/libstdc++-v3/crossconfig.m4 b/libstdc++-v3/crossconfig.m4
-index 344eec09d..53149ee89 100644
+index 344eec09d..c2a4b7a56 100644
 --- a/libstdc++-v3/crossconfig.m4
 +++ b/libstdc++-v3/crossconfig.m4
-@@ -245,7 +245,7 @@ case "${host}" in
-     AC_DEFINE(HAVE_SINHF)
-     AC_DEFINE(HAVE_SINHL)
+@@ -300,6 +300,12 @@ case "${host}" in
+     AC_DEFINE(HAVE_TANF)
+     AC_DEFINE(HAVE_TANHF)
      ;;
--  *-rtems*)
-+  *-rtems* | *-zephyr*)
-     GLIBCXX_CHECK_COMPILER_FEATURES
-     GLIBCXX_CHECK_LINKER_FEATURES
-     GLIBCXX_CHECK_MATH_SUPPORT
++  *-zephyr*)
++    GLIBCXX_CHECK_COMPILER_FEATURES
++    GLIBCXX_CHECK_LINKER_FEATURES
++    GLIBCXX_CHECK_MATH_SUPPORT
++    GLIBCXX_CHECK_STDLIB_SUPPORT
++    ;;
+   *)
+     AC_MSG_ERROR([No support for this host/target combination.])
+    ;;
 -- 
 2.17.1
 
